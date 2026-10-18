@@ -267,6 +267,15 @@ func (l *IssueList) Update(msg tea.Msg) tea.Cmd {
 		return nil
 	case tea.KeyPressMsg:
 		return l.handleKey(msg)
+	case tea.PasteMsg:
+		if !l.searching {
+			return nil
+		}
+		var cmd tea.Cmd
+		l.search, cmd = l.search.Update(msg)
+		l.cursor = 0
+		l.rebuild("")
+		return cmd
 	}
 	return nil
 }

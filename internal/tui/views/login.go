@@ -99,6 +99,13 @@ func (l *Login) Update(msg tea.Msg) tea.Cmd {
 			return nil
 		}
 		return common.Cmd(common.LoggedInMsg{})
+	case tea.PasteMsg:
+		if l.stage != 1 || l.busy {
+			return nil
+		}
+		var cmd tea.Cmd
+		l.input, cmd = l.input.Update(msg)
+		return cmd
 	case tea.KeyPressMsg:
 		if l.busy && msg.String() != "esc" {
 			return nil

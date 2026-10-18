@@ -171,3 +171,22 @@ func TestCreateIssueFlow(t *testing.T) {
 		t.Fatalf("ctrl+o should open the created issue, calls = %v", got)
 	}
 }
+
+func TestPasteIntoAPIKeyField(t *testing.T) {
+	h := newHarness(t)
+	h.fake.override("GetViewer", `{"errors":[{"message":"bad","extensions":{"type":"authentication error"}}]}`)
+	h.app.ctx.Svc.Invalidate()
+	h.exec(h.app.boot())
+	h.settle()
+	h.keys("enter")
+	h.send(tea.PasteMsg{Content: "lin_api_abc"})
+	h.contains("API key › ***********")
+}
+
+func TestPasteIntoListFilter(t *testing.T) {
+	h := newHarness(t)
+	h.keys("/")
+	h.send(tea.PasteMsg{Content: "dark"})
+	h.contains("/dark", "Add dark mode")
+	h.lacks("Fix login crash")
+}

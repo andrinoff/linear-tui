@@ -411,6 +411,14 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, nil
 	case tea.KeyPressMsg:
 		return a, a.handleKey(msg)
+	case tea.PasteMsg:
+		if a.modal != nil {
+			return a, a.modal.Update(msg)
+		}
+		if top := a.top(); top != nil {
+			return a, top.Update(msg)
+		}
+		return a, nil
 	case tea.MouseClickMsg:
 		return a, a.handleClick(msg.Mouse())
 	case tea.MouseWheelMsg:

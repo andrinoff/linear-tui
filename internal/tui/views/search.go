@@ -89,6 +89,10 @@ func (s *Search) Update(msg tea.Msg) tea.Cmd {
 		s.focused = false
 		s.input.Blur()
 		return s.results.Update(msg)
+	case tea.PasteMsg:
+		if s.focused {
+			return s.edit(msg)
+		}
 	case tea.KeyPressMsg:
 		if s.focused {
 			switch msg.String() {
@@ -99,15 +103,7 @@ func (s *Search) Update(msg tea.Msg) tea.Cmd {
 				s.input.Blur()
 				return nil
 			}
-			before := s.input.Value()
-			var cmd tea.Cmd
-			s.input, cmd = s.input.Update(msg)
-			if s.input.Value() != before {
-				s.seq++
-				seq := s.seq
-				return tea.Batch(cmd, tea.Tick(searchDebounce, func(time.Time) tea.Msg { return searchTickMsg{owner: s, seq: seq} }))
-			}
-			return cmd
+			return s.edit(msg)
 		}
 		if msg.String() == "/" && !s.results.Capturing() {
 			s.focused = true
@@ -119,6 +115,19 @@ func (s *Search) Update(msg tea.Msg) tea.Cmd {
 
 func (s *Search) Selection() []linear.Issue { return s.results.Selection() }
 func (s *Search) HandlesEsc() bool          { return s.results.HandlesEsc() }
+
+// edit applies typed or pasted input and schedules a debounced search.
+func (s *Search) edit(msg tea.Msg) tea.Cmd {
+	before := s.input.Value()
+	var cmd tea.Cmd
+	s.input, cmd = s.input.Update(msg)
+	if s.input.Value() == before {
+		return cmd
+	}
+	s.seq++
+	seq := s.seq
+	return tea.Batch(cmd, tea.Tick(searchDebounce, func(time.Time) tea.Msg { return searchTickMsg{owner: s, seq: seq} }))
+}
 
 func (s *Search) View() string {
 	t := s.ctx.Theme
