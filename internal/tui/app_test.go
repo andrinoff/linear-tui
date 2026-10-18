@@ -164,29 +164,49 @@ func TestCreateIssueFlow(t *testing.T) {
 	h := newHarness(t)
 	h.fake.override("IssueCreate", `{"data":{"issueCreate":{"success":true,"issue":`+issueJSON("i9", "ENG-9", "New bug", stTodo, 0)+`}}}`)
 	h.keys("c")
-	h.contains("New issue", "Team", "Engineering (ENG)")
-	h.keys("enter")
+	h.contains("ENG", "New issue", "Issue title", "Add description…", "Todo", "Priority", "ada", "Create issue", "Create more")
 	h.typeText("New bug")
-	h.keys("enter", "tab")
-	h.contains("Properties", "Status", "Priority")
-	for range 9 {
-		h.keys("enter")
-	}
+	h.keys("tab")
+	h.typeText("Steps")
+	h.keys("tab", "p")
+	h.contains("Urgent")
+	h.keys("down", "enter")
+	h.contains("Urgent", "Create issue")
+	h.keys("ctrl+s")
 	calls := h.fake.called("IssueCreate")
 	if len(calls) != 1 {
 		t.Fatalf("IssueCreate calls = %d", len(calls))
 	}
 	in := calls[0].vars["input"].(map[string]any)
-	if in["teamId"] != "team-eng" || in["title"] != "New bug" || in["stateId"] != "st-todo" || in["assigneeId"] != "u-me" || len(in) != 4 {
+	want := map[string]any{"teamId": "team-eng", "title": "New bug", "description": "Steps", "stateId": "st-todo", "assigneeId": "u-me", "priority": float64(1)}
+	for k, v := range want {
+		if in[k] != v {
+			t.Errorf("%s = %v, want %v", k, in[k], v)
+		}
+	}
+	if len(in) != len(want) {
 		t.Fatalf("create input = %v", in)
 	}
 	h.contains("Created ENG-9")
-	h.lacks("Properties")
+	h.lacks("Issue title")
 	h.keys("ctrl+o")
 	got := h.fake.called("GetIssue")
 	if len(got) == 0 || got[len(got)-1].vars["id"] != "i9" {
 		t.Fatalf("ctrl+o should open the created issue, calls = %v", got)
 	}
+}
+
+func TestCreateMoreKeepsDialogOpen(t *testing.T) {
+	h := newHarness(t)
+	h.fake.override("IssueCreate", `{"data":{"issueCreate":{"success":true,"issue":`+issueJSON("i9", "ENG-9", "One", stTodo, 0)+`}}}`)
+	h.keys("c", "ctrl+t")
+	h.typeText("One")
+	h.keys("ctrl+s")
+	h.contains("Issue title", "● Create more", "Created ENG-9")
+	h.keys("ctrl+s")
+	h.contains("a title is required")
+	h.keys("esc")
+	h.lacks("Issue title")
 }
 
 func TestPasteIntoAPIKeyField(t *testing.T) {
@@ -247,4 +267,15 @@ func TestInboxPullRequestPreview(t *testing.T) {
 	h.contains("Overview", "Diff", "Opened by", "Merged by", "Merged", "files changed")
 	h.keys("l", "t")
 	h.contains("tea.go", "+new line", "-old line")
+}
+
+func TestEditIssueDialog(t *testing.T) {
+	h := newHarness(t)
+	h.keys("enter", "e")
+	h.contains("Edit ENG-1", "Fix login crash", "Save changes", "Bug")
+	h.keys("ctrl+s")
+	if n := len(h.fake.called("IssueUpdate")); n != 0 {
+		t.Fatalf("saving without changes should not call the API, got %d", n)
+	}
+	h.lacks("Save changes")
 }

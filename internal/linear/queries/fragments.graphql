@@ -182,6 +182,10 @@ fragment TeamFull on Team {
   activeCycle {
     ...CycleRef
   }
+  # @genqlient(pointer: true)
+  defaultIssueState {
+    id
+  }
 }
 
 fragment NotificationFields on Notification {

@@ -71,9 +71,10 @@ type App struct {
 	ctx  *common.Ctx
 	opts Options
 
-	stack       []common.View
-	root        string
-	modal       common.View
+	stack []common.View
+	root  string
+	// modals stack: a picker opened from the issue form sits on top of it.
+	modals      []common.View
 	side        sidebar
 	sidebarOpen bool
 	focusSide   bool
@@ -204,7 +205,7 @@ func (a *App) boot() tea.Cmd {
 }
 
 func (a *App) showLogin(notice string) tea.Cmd {
-	a.loggedIn, a.booting, a.modal = false, false, nil
+	a.loggedIn, a.booting, a.modals = false, false, nil
 	l := views.NewLogin(a.ctx, a.opts.Store, a.opts.Endpoint, a.opts.OAuth, notice)
 	a.stack = []common.View{l}
 	a.resize()
@@ -245,8 +246,8 @@ func (a *App) resize() {
 	for _, v := range a.stack {
 		v.SetSize(w, h)
 	}
-	if a.modal != nil {
-		a.modal.SetSize(a.w-4, a.h-4)
+	for _, m := range a.modals {
+		m.SetSize(a.w-4, a.h-4)
 	}
 	a.help.SetWidth(a.w)
 }
@@ -266,7 +267,7 @@ func (a *App) navigate(target string) tea.Cmd {
 	}
 	a.root = target
 	a.stack = nil
-	a.modal = nil
+	a.modals = nil
 	a.side.build(a.ctx, a.unread)
 	a.side.selectRoot(target)
 	return a.push(v)
@@ -355,8 +356,8 @@ func (a *App) broadcast(msg tea.Msg) tea.Cmd {
 	for _, v := range a.stack {
 		cmds = append(cmds, v.Update(msg))
 	}
-	if a.modal != nil {
-		cmds = append(cmds, a.modal.Update(msg))
+	for _, m := range a.modals {
+		cmds = append(cmds, m.Update(msg))
 	}
 	return tea.Batch(cmds...)
 }
@@ -414,7 +415,7 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, a.addToast(common.ErrText(msg.Err), true)
 	case refreshTickMsg:
 		cmds := []tea.Cmd{a.scheduleRefresh()}
-		if a.loggedIn && a.modal == nil {
+		if a.loggedIn && a.topModal() == nil {
 			cmds = append(cmds, a.fetchUnread())
 			if top := a.top(); top != nil && !top.Capturing() {
 				a.lastSync = time.Now()
@@ -440,11 +441,11 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case common.NavigateMsg:
 		return a, a.navigate(msg.Target)
 	case common.ModalMsg:
-		a.modal = msg.Modal
-		a.modal.SetSize(a.w-4, a.h-4)
-		return a, a.modal.Init()
+		return a, a.openModal(msg.Modal)
 	case common.CloseModalMsg:
-		a.modal = nil
+		if len(a.modals) > 0 {
+			a.modals = a.modals[:len(a.modals)-1]
+		}
 		return a, nil
 	case common.ShowHelpMsg:
 		var vh []key.Binding
@@ -466,9 +467,9 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case common.OpenIssueMsg:
 		return a, a.push(views.NewIssueDetail(a.ctx, msg.ID, nil))
 	case common.CreateIssueMsg:
-		return a, a.push(views.NewIssueForm(a.ctx, msg.Defaults))
+		return a, a.openModal(views.NewIssueForm(a.ctx, msg.Defaults))
 	case common.EditIssueMsg:
-		return a, a.push(views.EditIssueForm(a.ctx, msg.Issue, msg.Description))
+		return a, a.openModal(views.EditIssueForm(a.ctx, msg.Issue, msg.Description))
 	case common.IssueCreatedMsg:
 		iss := msg.Issue
 		a.created = &iss
@@ -489,8 +490,8 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyPressMsg:
 		return a, a.handleKey(msg)
 	case tea.PasteMsg:
-		if a.modal != nil {
-			return a, a.modal.Update(msg)
+		if a.topModal() != nil {
+			return a, a.topModal().Update(msg)
 		}
 		if top := a.top(); top != nil {
 			return a, top.Update(msg)
@@ -499,7 +500,7 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.MouseClickMsg:
 		return a, a.handleClick(msg.Mouse())
 	case tea.MouseWheelMsg:
-		if a.modal != nil {
+		if a.topModal() != nil {
 			return a, nil
 		}
 		k := tea.KeyPressMsg{Code: tea.KeyDown}
@@ -514,8 +515,15 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return a, a.broadcast(msg)
 }
 
+func (a *App) topModal() common.View {
+	if len(a.modals) == 0 {
+		return nil
+	}
+	return a.modals[len(a.modals)-1]
+}
+
 func (a *App) openModal(m common.View) tea.Cmd {
-	a.modal = m
+	a.modals = append(a.modals, m)
 	m.SetSize(a.w-4, a.h-4)
 	return m.Init()
 }
@@ -607,8 +615,8 @@ func (a *App) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 	if key.Matches(msg, k.Quit) {
 		return tea.Quit
 	}
-	if a.modal != nil {
-		return a.modal.Update(msg)
+	if a.topModal() != nil {
+		return a.topModal().Update(msg)
 	}
 	top := a.top()
 	if top == nil {
@@ -706,7 +714,7 @@ func (a *App) openSideRow(r *sideRow) tea.Cmd {
 }
 
 func (a *App) handleClick(m tea.Mouse) tea.Cmd {
-	if a.modal != nil || !a.loggedIn {
+	if a.topModal() != nil || !a.loggedIn {
 		return nil
 	}
 	if m.X < a.sideW() {
@@ -779,10 +787,10 @@ func (a *App) render() string {
 	base = frame(base)
 
 	layers := []*lipgloss.Layer{lipgloss.NewLayer(base)}
-	if a.modal != nil {
-		m := theme.Paint(a.modal.View(), t.ModalBg)
+	for i, md := range a.modals {
+		m := theme.Paint(md.View(), t.ModalBg)
 		mw, mh := lipgloss.Size(m)
-		layers = append(layers, lipgloss.NewLayer(m).X(max(0, (a.w-mw)/2)).Y(max(0, (a.h-mh)/4)).Z(1))
+		layers = append(layers, lipgloss.NewLayer(m).X(max(0, (a.w-mw)/2)).Y(max(0, (a.h-mh)/4+2*i)).Z(1+i))
 	}
 	y := a.h - 2
 	for i := len(a.toasts) - 1; i >= 0; i-- {
@@ -795,7 +803,7 @@ func (a *App) render() string {
 		box := theme.Paint(t.Box(icon+ansiWrap(tt.text, w-6), w, t.Border), t.ModalBg)
 		bw, bh := lipgloss.Size(box)
 		y -= bh
-		layers = append(layers, lipgloss.NewLayer(box).X(max(0, a.w-bw-2)).Y(max(0, y)).Z(2))
+		layers = append(layers, lipgloss.NewLayer(box).X(max(0, a.w-bw-2)).Y(max(0, y)).Z(100))
 	}
 	if len(layers) == 1 {
 		return base
@@ -842,8 +850,8 @@ func (a *App) statusBar() string {
 	}
 	l := t.Faint.Render(" " + strings.Join(left, "  "))
 	var bindings []key.Binding
-	if a.modal != nil {
-		bindings = a.modal.Help()
+	if a.topModal() != nil {
+		bindings = a.topModal().Help()
 	} else if a.focusSide {
 		bindings = []key.Binding{a.ctx.Keys.Up, a.ctx.Keys.Down, a.ctx.Keys.Enter, a.ctx.Keys.FocusNext}
 	} else if top := a.top(); top != nil {

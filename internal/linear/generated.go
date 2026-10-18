@@ -3149,6 +3149,8 @@ type TeamFull struct {
 	States TeamFullStatesWorkflowStateConnection `json:"states"`
 	// Team's currently active cycle.
 	ActiveCycle *CycleRef `json:"activeCycle"`
+	// The default workflow state into which issues are set when they are opened by team members.
+	DefaultIssueState *TeamFullDefaultIssueStateWorkflowState `json:"defaultIssueState"`
 }
 
 // GetId returns TeamFull.Id, and is useful for accessing the field via an interface.
@@ -3177,6 +3179,23 @@ func (v *TeamFull) GetStates() TeamFullStatesWorkflowStateConnection { return v.
 
 // GetActiveCycle returns TeamFull.ActiveCycle, and is useful for accessing the field via an interface.
 func (v *TeamFull) GetActiveCycle() *CycleRef { return v.ActiveCycle }
+
+// GetDefaultIssueState returns TeamFull.DefaultIssueState, and is useful for accessing the field via an interface.
+func (v *TeamFull) GetDefaultIssueState() *TeamFullDefaultIssueStateWorkflowState {
+	return v.DefaultIssueState
+}
+
+// TeamFullDefaultIssueStateWorkflowState includes the requested fields of the GraphQL type WorkflowState.
+// The GraphQL type's documentation follows.
+//
+// A state in a team's workflow, representing an issue status such as Triage, Backlog, Todo, In Progress, In Review, Done, or Canceled. Each team has its own set of workflow states that define the progression of issues through the team's process. Workflow states have a type that categorizes them (triage, backlog, unstarted, started, completed, canceled), a position that determines their display order, and a color for visual identification. States can be inherited from parent teams to sub-teams.
+type TeamFullDefaultIssueStateWorkflowState struct {
+	// The unique identifier of the entity.
+	Id string `json:"id"`
+}
+
+// GetId returns TeamFullDefaultIssueStateWorkflowState.Id, and is useful for accessing the field via an interface.
+func (v *TeamFullDefaultIssueStateWorkflowState) GetId() string { return v.Id }
 
 // TeamFullStatesWorkflowStateConnection includes the requested fields of the GraphQL type WorkflowStateConnection.
 type TeamFullStatesWorkflowStateConnection struct {
@@ -5270,6 +5289,9 @@ fragment TeamFull on Team {
 	}
 	activeCycle {
 		... CycleRef
+	}
+	defaultIssueState {
+		id
 	}
 }
 fragment StateFields on WorkflowState {

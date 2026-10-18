@@ -108,6 +108,17 @@ linear-tui --no-branch
 [`config.example.toml`](config.example.toml) for every option, including key
 overrides.
 
+### New issue dialog
+
+`c` opens Linear's new-issue dialog over the current screen, already set to
+the team, status, cycle, project and assignee you're looking at. Type a title,
+then press `tab` to move to the description (`ctrl+e` opens `$EDITOR`) and
+`tab` again to reach the property chips. There, `←`/`→` and `enter` open a chip
+(team, status, priority, assignee, project, labels, cycle, and `···` for
+estimate, due date and parent), or use the usual shortcuts (`s`, `p`, `a`, `P`,
+`L`, `C`). `ctrl+s` creates the issue, and `ctrl+t` toggles "Create more" to keep
+the dialog open for the next one. Editing an issue (`e`) uses the same dialog.
+
 ### Themes
 
 The built-in theme follows Linear's palette and leaves the background

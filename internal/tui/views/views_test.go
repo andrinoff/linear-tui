@@ -14,32 +14,26 @@ import (
 
 func TestEditFormSendsOnlyChanges(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		io.WriteString(w, `{"data":{"team":{"members":{"nodes":[{"id":"u1","active":true}]}}}}`)
+		io.WriteString(w, `{"data":{"teams":{"nodes":[{"id":"t1","key":"ENG","name":"Eng","states":{"nodes":[{"id":"s1","type":"unstarted"},{"id":"s2","type":"started"}]}}]}}}`)
 	}))
 	defer srv.Close()
 	ctx := &common.Ctx{Cfg: config.Default(), Theme: theme.New(true), Keys: common.DefaultKeys(),
 		Svc: linear.NewService(linear.NewClient(srv.URL, http.DefaultTransport))}
 	me := linear.User{Id: "u1", Active: true}
-	team := linear.Team{Id: "t1"}
-	team.States.Nodes = []linear.State{{Id: "s1"}, {Id: "s2"}}
 	iss := linear.Issue{Id: "i1", Title: "Old", Priority: 2, Estimate: 3, State: linear.State{Id: "s1"}, Team: linear.TeamRef{Id: "t1"}, Assignee: &me}
 	iss.Labels.Nodes = []linear.Label{{Id: "l1"}}
 
 	f := EditIssueForm(ctx, iss, "desc")
-	f.teams = []linear.Team{team}
-	f.labels = []linear.Label{{Id: "l1"}, {Id: "l2"}}
-	f.cycles["t1"] = nil
-
 	in, err := f.input()
 	if err != nil || len(in) != 0 {
 		t.Fatalf("unchanged form = %v, %v", in, err)
 	}
 
-	f.v.Title = "New"
-	f.v.AssigneeID = ""
-	f.v.StateID = "s2"
-	f.v.Estimate = -1
-	f.v.Labels = []string{"l2", "l1"}
+	f.title.SetValue("New")
+	f.assignee = nil
+	f.state = &f.team.States.Nodes[1]
+	f.estimate = -1
+	f.labels = append(f.labels, linear.Label{Id: "l2"})
 	in, err = f.input()
 	if err != nil {
 		t.Fatal(err)
@@ -51,11 +45,16 @@ func TestEditFormSendsOnlyChanges(t *testing.T) {
 			t.Errorf("%s = %v (present %v), want %v", k, got, ok, v)
 		}
 	}
-	if _, ok := in["labelIds"]; !ok {
-		t.Error("labelIds should be sent when labels change")
+	if ids, _ := in["labelIds"].([]string); len(ids) != 2 {
+		t.Errorf("labelIds = %v", in["labelIds"])
 	}
 	if len(in) != len(want)+1 {
 		t.Errorf("unexpected fields: %v", in)
+	}
+
+	f.title.SetValue("  ")
+	if _, err := f.input(); err == nil {
+		t.Error("empty title should be rejected")
 	}
 }
 
