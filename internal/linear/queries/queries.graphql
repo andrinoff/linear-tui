@@ -1,0 +1,214 @@
+query GetViewer {
+  # @genqlient(flatten: true)
+  viewer {
+    ...UserFields
+  }
+  organization {
+    id
+    name
+    urlKey
+  }
+}
+
+query Teams {
+  teams(first: 100) {
+    # @genqlient(flatten: true)
+    nodes {
+      ...TeamFull
+    }
+  }
+}
+
+query Labels {
+  issueLabels(first: 250) {
+    # @genqlient(flatten: true)
+    nodes {
+      ...LabelFields
+    }
+  }
+}
+
+# @genqlient(omitempty: true)
+query Issues(
+  $filter: IssueFilter
+  $first: Int
+  $after: String
+  $orderBy: PaginationOrderBy
+) {
+  issues(filter: $filter, first: $first, after: $after, orderBy: $orderBy) {
+    # @genqlient(flatten: true)
+    nodes {
+      ...IssueFields
+    }
+    pageInfo {
+      hasNextPage
+      endCursor
+    }
+  }
+}
+
+query GetIssue($id: String!) {
+  issue(id: $id) {
+    ...IssueFields
+    description
+    # @genqlient(flatten: true, pointer: true)
+    creator {
+      ...UserFields
+    }
+    # @genqlient(pointer: true)
+    parent {
+      id
+      identifier
+      title
+    }
+    children(first: 100) {
+      # @genqlient(flatten: true)
+      nodes {
+        ...IssueFields
+      }
+    }
+    relations(first: 50) {
+      nodes {
+        id
+        type
+        relatedIssue {
+          id
+          identifier
+          title
+          # @genqlient(flatten: true)
+          state {
+            ...StateFields
+          }
+        }
+      }
+    }
+    inverseRelations(first: 50) {
+      nodes {
+        id
+        type
+        issue {
+          id
+          identifier
+          title
+          # @genqlient(flatten: true)
+          state {
+            ...StateFields
+          }
+        }
+      }
+    }
+    attachments(first: 50) {
+      nodes {
+        id
+        title
+        subtitle
+        url
+      }
+    }
+    comments(first: 100) {
+      # @genqlient(flatten: true)
+      nodes {
+        ...CommentFields
+      }
+    }
+  }
+}
+
+query IssueByBranch($branchName: String!) {
+  # @genqlient(flatten: true, pointer: true)
+  issueVcsBranchSearch(branchName: $branchName) {
+    ...IssueFields
+  }
+}
+
+query Cycles($teamId: String!) {
+  team(id: $teamId) {
+    cycles(first: 50) {
+      # @genqlient(flatten: true)
+      nodes {
+        ...CycleFields
+      }
+    }
+  }
+}
+
+query Projects {
+  projects(first: 100) {
+    # @genqlient(flatten: true)
+    nodes {
+      ...ProjectFields
+    }
+  }
+}
+
+query GetProject($id: String!) {
+  project(id: $id) {
+    ...ProjectFields
+    content
+    projectMilestones(first: 50) {
+      nodes {
+        id
+        name
+        description
+        targetDate
+        progress
+        sortOrder
+      }
+    }
+  }
+}
+
+# @genqlient(omitempty: true)
+query Notifications($first: Int, $after: String) {
+  notifications(first: $first, after: $after) {
+    # @genqlient(flatten: true)
+    nodes {
+      ...NotificationFields
+    }
+    pageInfo {
+      hasNextPage
+      endCursor
+    }
+  }
+}
+
+query UnreadCount {
+  notificationsUnreadCount
+}
+
+query CustomViews {
+  customViews(first: 100) {
+    nodes {
+      id
+      name
+      description
+      modelName
+      shared
+      # @genqlient(flatten: true, pointer: true)
+      team {
+        ...TeamRef
+      }
+    }
+  }
+}
+
+query CustomViewIssues(
+  $id: String!
+  # @genqlient(omitempty: true)
+  $first: Int
+  # @genqlient(omitempty: true)
+  $after: String
+) {
+  customView(id: $id) {
+    issues(first: $first, after: $after) {
+      # @genqlient(flatten: true)
+      nodes {
+        ...IssueFields
+      }
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+    }
+  }
+}

@@ -1,0 +1,211 @@
+fragment StateFields on WorkflowState {
+  id
+  name
+  type
+  color
+  position
+}
+
+fragment UserFields on User {
+  id
+  name
+  displayName
+  email
+  isMe
+  active
+}
+
+fragment LabelFields on IssueLabel {
+  id
+  name
+  color
+  # @genqlient(pointer: true)
+  team {
+    id
+  }
+}
+
+fragment TeamRef on Team {
+  id
+  key
+  name
+}
+
+fragment CycleRef on Cycle {
+  id
+  number
+  name
+  startsAt
+  endsAt
+}
+
+fragment ProjectRef on Project {
+  id
+  name
+  color
+}
+
+fragment MilestoneRef on ProjectMilestone {
+  id
+  name
+  sortOrder
+}
+
+fragment IssueFields on Issue {
+  id
+  identifier
+  title
+  priority
+  priorityLabel
+  estimate
+  dueDate
+  url
+  branchName
+  createdAt
+  updatedAt
+  sortOrder
+  # @genqlient(flatten: true)
+  state {
+    ...StateFields
+  }
+  # @genqlient(flatten: true, pointer: true)
+  assignee {
+    ...UserFields
+  }
+  # @genqlient(flatten: true)
+  team {
+    ...TeamRef
+  }
+  labels(first: 50) {
+    # @genqlient(flatten: true)
+    nodes {
+      ...LabelFields
+    }
+  }
+  # @genqlient(flatten: true, pointer: true)
+  cycle {
+    ...CycleRef
+  }
+  # @genqlient(flatten: true, pointer: true)
+  project {
+    ...ProjectRef
+  }
+  # @genqlient(flatten: true, pointer: true)
+  projectMilestone {
+    ...MilestoneRef
+  }
+}
+
+fragment CommentFields on Comment {
+  id
+  body
+  createdAt
+  editedAt
+  # @genqlient(flatten: true, pointer: true)
+  user {
+    ...UserFields
+  }
+  # @genqlient(pointer: true)
+  parent {
+    id
+  }
+}
+
+fragment CycleFields on Cycle {
+  id
+  number
+  name
+  description
+  startsAt
+  endsAt
+  completedAt
+  progress
+  isActive
+  isFuture
+  isPast
+  isNext
+  scopeHistory
+  completedScopeHistory
+  issueCountHistory
+  completedIssueCountHistory
+}
+
+fragment ProjectFields on Project {
+  id
+  name
+  description
+  color
+  progress
+  startDate
+  targetDate
+  health
+  url
+  status {
+    name
+    type
+    color
+  }
+  # @genqlient(flatten: true, pointer: true)
+  lead {
+    ...UserFields
+  }
+  teams(first: 20) {
+    # @genqlient(flatten: true)
+    nodes {
+      ...TeamRef
+    }
+  }
+}
+
+fragment TeamFull on Team {
+  id
+  key
+  name
+  cyclesEnabled
+  issueEstimationType
+  issueEstimationAllowZero
+  issueEstimationExtended
+  states(first: 100) {
+    # @genqlient(flatten: true)
+    nodes {
+      ...StateFields
+    }
+  }
+  members(first: 250) {
+    # @genqlient(flatten: true)
+    nodes {
+      ...UserFields
+    }
+  }
+  # @genqlient(flatten: true, pointer: true)
+  activeCycle {
+    ...CycleRef
+  }
+}
+
+fragment NotificationFields on Notification {
+  __typename
+  id
+  type
+  title
+  subtitle
+  readAt
+  snoozedUntilAt
+  createdAt
+  url
+  # @genqlient(flatten: true, pointer: true)
+  actor {
+    ...UserFields
+  }
+  ... on IssueNotification {
+    # @genqlient(flatten: true)
+    issue {
+      ...IssueFields
+    }
+    # @genqlient(pointer: true)
+    comment {
+      id
+      body
+    }
+  }
+}

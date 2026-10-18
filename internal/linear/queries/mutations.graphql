@@ -1,0 +1,81 @@
+mutation IssueCreate($input: IssueCreateInput!) {
+  issueCreate(input: $input) {
+    success
+    # @genqlient(flatten: true, pointer: true)
+    issue {
+      ...IssueFields
+    }
+  }
+}
+
+mutation IssueUpdate($id: String!, $input: IssueUpdateInput!) {
+  issueUpdate(id: $id, input: $input) {
+    success
+    # @genqlient(flatten: true, pointer: true)
+    issue {
+      ...IssueFields
+    }
+  }
+}
+
+mutation IssueArchive($id: String!) {
+  issueArchive(id: $id) {
+    success
+  }
+}
+
+mutation IssueDelete($id: String!) {
+  issueDelete(id: $id) {
+    success
+  }
+}
+
+mutation IssueRelationCreate($input: IssueRelationCreateInput!) {
+  issueRelationCreate(input: $input) {
+    success
+  }
+}
+
+mutation AttachmentLinkURL($issueId: String!, $url: String!, $title: String) {
+  attachmentLinkURL(issueId: $issueId, url: $url, title: $title) {
+    success
+  }
+}
+
+mutation CommentCreate($input: CommentCreateInput!) {
+  commentCreate(input: $input) {
+    success
+    # @genqlient(flatten: true)
+    comment {
+      ...CommentFields
+    }
+  }
+}
+
+mutation CommentUpdate($id: String!, $input: CommentUpdateInput!) {
+  commentUpdate(id: $id, input: $input) {
+    success
+    # @genqlient(flatten: true)
+    comment {
+      ...CommentFields
+    }
+  }
+}
+
+mutation CommentDelete($id: String!) {
+  commentDelete(id: $id) {
+    success
+  }
+}
+
+mutation NotificationUpdate($id: String!, $input: NotificationUpdateInput!) {
+  notificationUpdate(id: $id, input: $input) {
+    success
+  }
+}
+
+mutation NotificationArchive($id: String!) {
+  notificationArchive(id: $id) {
+    success
+  }
+}

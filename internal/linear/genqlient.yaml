@@ -1,0 +1,30 @@
+schema: schema.graphql
+operations:
+  - queries/*.graphql
+generated: generated.go
+package: linear
+optional: value
+use_struct_references: false
+bindings:
+  DateTime:
+    type: time.Time
+  TimelessDate:
+    type: string
+  JSON:
+    type: encoding/json.RawMessage
+  JSONObject:
+    type: encoding/json.RawMessage
+  IssueFilter:
+    type: github.com/andrinoff/linear-tui/internal/linear.Input
+  IssueCreateInput:
+    type: github.com/andrinoff/linear-tui/internal/linear.Input
+  IssueUpdateInput:
+    type: github.com/andrinoff/linear-tui/internal/linear.Input
+  CommentCreateInput:
+    type: github.com/andrinoff/linear-tui/internal/linear.Input
+  CommentUpdateInput:
+    type: github.com/andrinoff/linear-tui/internal/linear.Input
+  NotificationUpdateInput:
+    type: github.com/andrinoff/linear-tui/internal/linear.Input
+  IssueRelationCreateInput:
+    type: github.com/andrinoff/linear-tui/internal/linear.Input

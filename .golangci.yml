@@ -1,0 +1,21 @@
+version: "2"
+run:
+  timeout: 5m
+linters:
+  default: standard
+  enable:
+    - bodyclose
+    - errorlint
+    - misspell
+    - unconvert
+  exclusions:
+    paths:
+      - internal/linear/generated.go
+    rules:
+      - path: _test\.go
+        linters:
+          - errcheck
+formatters:
+  enable:
+    - gofmt
+    - goimports

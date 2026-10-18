@@ -1,0 +1,29 @@
+# linear-tui configuration. All keys are optional.
+
+# Team to focus on start (key, name, or id). Defaults to the last used team.
+default_team = "ENG"
+
+# Background refresh of the current view and inbox badge. "0s" disables it.
+refresh_interval = "60s"
+
+# auto | dark | light
+theme = "auto"
+
+# Editor for descriptions and comments (falls back to $VISUAL, $EDITOR, vi).
+editor = "nvim"
+
+[oauth]
+client_id = ""
+# Fixed loopback port; must match the redirect URI registered in Linear.
+port = 8976
+
+[git]
+# Open the issue matching the current git branch on start.
+open_from_branch = true
+
+# Override any binding by action name, e.g. create, state, assignee, priority,
+# labels, cycle, project, comment, open, checkout, archive, delete, palette,
+# search, filter, refresh, group, sort, filter_bar, clear_filter, move_left,
+# move_right, toggle_done, mark_read, snooze, mark_all_read.
+[keys]
+create = ["n"]
