@@ -155,6 +155,7 @@ func (f *IssueForm) Init() tea.Cmd {
 		}
 		if teamID != "" {
 			msg.cycles, _ = svc.Cycles(bg(), teamID)
+			_, _ = svc.Members(bg(), teamID)
 		}
 		if needDesc {
 			d, err := svc.Issue(bg(), id)
@@ -249,6 +250,13 @@ func (f *IssueForm) team() *linear.Team {
 	return nil
 }
 
+// teamMembers is served from the service cache, which Init warms for the
+// initial team.
+func (f *IssueForm) teamMembers() []linear.User {
+	m, _ := f.ctx.Svc.Members(bg(), f.v.TeamID)
+	return m
+}
+
 func (f *IssueForm) teamCycles() []linear.Cycle {
 	f.cyclesMu.Lock()
 	c, ok := f.cycles[f.v.TeamID]
@@ -302,15 +310,13 @@ func (f *IssueForm) build() tea.Cmd {
 
 	assignee := huh.NewSelect[string]().Title("Assignee").Value(&f.v.AssigneeID).OptionsFunc(func() []huh.Option[string] {
 		opts := []huh.Option[string]{huh.NewOption("Unassigned", "")}
-		if t := f.team(); t != nil {
-			for _, u := range t.Members.Nodes {
-				if u.Active {
-					name := u.DisplayName
-					if u.IsMe {
-						name += " (me)"
-					}
-					opts = append(opts, huh.NewOption(name, u.Id))
+		for _, u := range f.teamMembers() {
+			if u.Active {
+				name := u.DisplayName
+				if u.IsMe {
+					name += " (me)"
 				}
+				opts = append(opts, huh.NewOption(name, u.Id))
 			}
 		}
 		return opts
@@ -428,7 +434,7 @@ func (f *IssueForm) input() (linear.Input, error) {
 	in := linear.Input{}
 	team := f.team()
 	stateOK := team != nil && slices.ContainsFunc(team.States.Nodes, func(s linear.State) bool { return s.Id == v.StateID })
-	memberOK := team != nil && slices.ContainsFunc(team.Members.Nodes, func(u linear.User) bool { return u.Id == v.AssigneeID })
+	memberOK := slices.ContainsFunc(f.teamMembers(), func(u linear.User) bool { return u.Id == v.AssigneeID })
 	cycleOK := slices.ContainsFunc(f.teamCycles(), func(c linear.Cycle) bool { return c.Id == v.CycleID })
 	var labels []string
 	for _, id := range v.Labels {

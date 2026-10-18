@@ -13,6 +13,7 @@ fragment UserFields on User {
   email
   isMe
   active
+  avatarUrl
 }
 
 fragment LabelFields on IssueLabel {
@@ -76,7 +77,7 @@ fragment IssueFields on Issue {
   team {
     ...TeamRef
   }
-  labels(first: 50) {
+  labels(first: 20) {
     # @genqlient(flatten: true)
     nodes {
       ...LabelFields
@@ -93,6 +94,12 @@ fragment IssueFields on Issue {
   # @genqlient(flatten: true, pointer: true)
   projectMilestone {
     ...MilestoneRef
+  }
+  # @genqlient(pointer: true)
+  parent {
+    id
+    identifier
+    title
   }
 }
 
@@ -165,16 +172,10 @@ fragment TeamFull on Team {
   issueEstimationType
   issueEstimationAllowZero
   issueEstimationExtended
-  states(first: 100) {
+  states(first: 50) {
     # @genqlient(flatten: true)
     nodes {
       ...StateFields
-    }
-  }
-  members(first: 250) {
-    # @genqlient(flatten: true)
-    nodes {
-      ...UserFields
     }
   }
   # @genqlient(flatten: true, pointer: true)
@@ -207,5 +208,7 @@ fragment NotificationFields on Notification {
       id
       body
     }
+    parentCommentId
+    reactionEmoji
   }
 }

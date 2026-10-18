@@ -1114,6 +1114,8 @@ type GetViewerOrganization struct {
 	Name string `json:"name"`
 	// The workspace's unique URL key, used in URLs to identify the workspace.
 	UrlKey string `json:"urlKey"`
+	// The URL of the workspace's logo image. Null if no logo has been uploaded.
+	LogoUrl string `json:"logoUrl"`
 }
 
 // GetId returns GetViewerOrganization.Id, and is useful for accessing the field via an interface.
@@ -1124,6 +1126,9 @@ func (v *GetViewerOrganization) GetName() string { return v.Name }
 
 // GetUrlKey returns GetViewerOrganization.UrlKey, and is useful for accessing the field via an interface.
 func (v *GetViewerOrganization) GetUrlKey() string { return v.UrlKey }
+
+// GetLogoUrl returns GetViewerOrganization.LogoUrl, and is useful for accessing the field via an interface.
+func (v *GetViewerOrganization) GetLogoUrl() string { return v.LogoUrl }
 
 // GetViewerResponse is returned by GetViewer on success.
 type GetViewerResponse struct {
@@ -1266,6 +1271,8 @@ type IssueFields struct {
 	Project *ProjectRef `json:"project"`
 	// The project milestone that the issue is associated with. Null if the issue is not assigned to a specific milestone within its project.
 	ProjectMilestone *MilestoneRef `json:"projectMilestone"`
+	// The parent of the issue.
+	Parent *IssueFieldsParentIssue `json:"parent"`
 }
 
 // GetId returns IssueFields.Id, and is useful for accessing the field via an interface.
@@ -1325,6 +1332,9 @@ func (v *IssueFields) GetProject() *ProjectRef { return v.Project }
 // GetProjectMilestone returns IssueFields.ProjectMilestone, and is useful for accessing the field via an interface.
 func (v *IssueFields) GetProjectMilestone() *MilestoneRef { return v.ProjectMilestone }
 
+// GetParent returns IssueFields.Parent, and is useful for accessing the field via an interface.
+func (v *IssueFields) GetParent() *IssueFieldsParentIssue { return v.Parent }
+
 // IssueFieldsLabelsIssueLabelConnection includes the requested fields of the GraphQL type IssueLabelConnection.
 type IssueFieldsLabelsIssueLabelConnection struct {
 	Nodes []LabelFields `json:"nodes"`
@@ -1332,6 +1342,28 @@ type IssueFieldsLabelsIssueLabelConnection struct {
 
 // GetNodes returns IssueFieldsLabelsIssueLabelConnection.Nodes, and is useful for accessing the field via an interface.
 func (v *IssueFieldsLabelsIssueLabelConnection) GetNodes() []LabelFields { return v.Nodes }
+
+// IssueFieldsParentIssue includes the requested fields of the GraphQL type Issue.
+// The GraphQL type's documentation follows.
+//
+// An issue is the core work item in Linear. Issues belong to a team, have a workflow status, can be assigned to users, carry a priority level, and can be organized into projects and cycles. Issues support sub-issues (parent-child hierarchy up to 10 levels deep), labels, due dates, estimates, and SLA tracking. They can also be linked to other issues via relations, attached to releases, and tracked through their full history of changes.
+type IssueFieldsParentIssue struct {
+	// The unique identifier of the entity.
+	Id string `json:"id"`
+	// Issue's human readable identifier (e.g. ENG-123).
+	Identifier string `json:"identifier"`
+	// The issue's title. This is the primary human-readable summary of the work item.
+	Title string `json:"title"`
+}
+
+// GetId returns IssueFieldsParentIssue.Id, and is useful for accessing the field via an interface.
+func (v *IssueFieldsParentIssue) GetId() string { return v.Id }
+
+// GetIdentifier returns IssueFieldsParentIssue.Identifier, and is useful for accessing the field via an interface.
+func (v *IssueFieldsParentIssue) GetIdentifier() string { return v.Identifier }
+
+// GetTitle returns IssueFieldsParentIssue.Title, and is useful for accessing the field via an interface.
+func (v *IssueFieldsParentIssue) GetTitle() string { return v.Title }
 
 // IssueRelationCreateIssueRelationCreateIssueRelationPayload includes the requested fields of the GraphQL type IssueRelationPayload.
 // The GraphQL type's documentation follows.
@@ -2083,6 +2115,10 @@ type NotificationFieldsIssueNotification struct {
 	Issue IssueFields `json:"issue"`
 	// The comment related to the notification.
 	Comment *NotificationFieldsComment `json:"comment"`
+	// Related parent comment ID. Null if the notification is not related to a comment.
+	ParentCommentId string `json:"parentCommentId"`
+	// Name of the reaction emoji related to the notification.
+	ReactionEmoji string `json:"reactionEmoji"`
 }
 
 // GetTypename returns NotificationFieldsIssueNotification.Typename, and is useful for accessing the field via an interface.
@@ -2122,6 +2158,12 @@ func (v *NotificationFieldsIssueNotification) GetIssue() IssueFields { return v.
 func (v *NotificationFieldsIssueNotification) GetComment() *NotificationFieldsComment {
 	return v.Comment
 }
+
+// GetParentCommentId returns NotificationFieldsIssueNotification.ParentCommentId, and is useful for accessing the field via an interface.
+func (v *NotificationFieldsIssueNotification) GetParentCommentId() string { return v.ParentCommentId }
+
+// GetReactionEmoji returns NotificationFieldsIssueNotification.ReactionEmoji, and is useful for accessing the field via an interface.
+func (v *NotificationFieldsIssueNotification) GetReactionEmoji() string { return v.ReactionEmoji }
 
 // NotificationFields includes the GraphQL fields of OauthClientApprovalNotification requested by the fragment NotificationFields.
 // The GraphQL type's documentation follows.
@@ -3035,8 +3077,6 @@ type TeamFull struct {
 	IssueEstimationExtended bool `json:"issueEstimationExtended"`
 	// The states that define the workflow associated with the team.
 	States TeamFullStatesWorkflowStateConnection `json:"states"`
-	// Users who are members of this team. Supports filtering and pagination.
-	Members TeamFullMembersUserConnection `json:"members"`
 	// Team's currently active cycle.
 	ActiveCycle *CycleRef `json:"activeCycle"`
 }
@@ -3065,19 +3105,8 @@ func (v *TeamFull) GetIssueEstimationExtended() bool { return v.IssueEstimationE
 // GetStates returns TeamFull.States, and is useful for accessing the field via an interface.
 func (v *TeamFull) GetStates() TeamFullStatesWorkflowStateConnection { return v.States }
 
-// GetMembers returns TeamFull.Members, and is useful for accessing the field via an interface.
-func (v *TeamFull) GetMembers() TeamFullMembersUserConnection { return v.Members }
-
 // GetActiveCycle returns TeamFull.ActiveCycle, and is useful for accessing the field via an interface.
 func (v *TeamFull) GetActiveCycle() *CycleRef { return v.ActiveCycle }
-
-// TeamFullMembersUserConnection includes the requested fields of the GraphQL type UserConnection.
-type TeamFullMembersUserConnection struct {
-	Nodes []UserFields `json:"nodes"`
-}
-
-// GetNodes returns TeamFullMembersUserConnection.Nodes, and is useful for accessing the field via an interface.
-func (v *TeamFullMembersUserConnection) GetNodes() []UserFields { return v.Nodes }
 
 // TeamFullStatesWorkflowStateConnection includes the requested fields of the GraphQL type WorkflowStateConnection.
 type TeamFullStatesWorkflowStateConnection struct {
@@ -3086,6 +3115,35 @@ type TeamFullStatesWorkflowStateConnection struct {
 
 // GetNodes returns TeamFullStatesWorkflowStateConnection.Nodes, and is useful for accessing the field via an interface.
 func (v *TeamFullStatesWorkflowStateConnection) GetNodes() []StateFields { return v.Nodes }
+
+// TeamMembersResponse is returned by TeamMembers on success.
+type TeamMembersResponse struct {
+	// Fetches a specific team by its ID.
+	Team TeamMembersTeam `json:"team"`
+}
+
+// GetTeam returns TeamMembersResponse.Team, and is useful for accessing the field via an interface.
+func (v *TeamMembersResponse) GetTeam() TeamMembersTeam { return v.Team }
+
+// TeamMembersTeam includes the requested fields of the GraphQL type Team.
+// The GraphQL type's documentation follows.
+//
+// A team is the primary organizational unit in Linear. Issues belong to teams, and each team has its own workflow states, cycles, labels, and settings. Teams can be public (visible to all workspace members), private (visible only to team members), or restricted (visible only within an enclosing private-team boundary). Teams can also have sub-teams that inherit settings from their parent.
+type TeamMembersTeam struct {
+	// Users who are members of this team. Supports filtering and pagination.
+	Members TeamMembersTeamMembersUserConnection `json:"members"`
+}
+
+// GetMembers returns TeamMembersTeam.Members, and is useful for accessing the field via an interface.
+func (v *TeamMembersTeam) GetMembers() TeamMembersTeamMembersUserConnection { return v.Members }
+
+// TeamMembersTeamMembersUserConnection includes the requested fields of the GraphQL type UserConnection.
+type TeamMembersTeamMembersUserConnection struct {
+	Nodes []UserFields `json:"nodes"`
+}
+
+// GetNodes returns TeamMembersTeamMembersUserConnection.Nodes, and is useful for accessing the field via an interface.
+func (v *TeamMembersTeamMembersUserConnection) GetNodes() []UserFields { return v.Nodes }
 
 // TeamRef includes the GraphQL fields of Team requested by the fragment TeamRef.
 // The GraphQL type's documentation follows.
@@ -3152,6 +3210,8 @@ type UserFields struct {
 	IsMe bool `json:"isMe"`
 	// Whether the user account is active or disabled (suspended).
 	Active bool `json:"active"`
+	// An URL to the user's avatar image.
+	AvatarUrl string `json:"avatarUrl"`
 }
 
 // GetId returns UserFields.Id, and is useful for accessing the field via an interface.
@@ -3171,6 +3231,9 @@ func (v *UserFields) GetIsMe() bool { return v.IsMe }
 
 // GetActive returns UserFields.Active, and is useful for accessing the field via an interface.
 func (v *UserFields) GetActive() bool { return v.Active }
+
+// GetAvatarUrl returns UserFields.AvatarUrl, and is useful for accessing the field via an interface.
+func (v *UserFields) GetAvatarUrl() string { return v.AvatarUrl }
 
 // __AttachmentLinkURLInput is used internally by genqlient
 type __AttachmentLinkURLInput struct {
@@ -3360,6 +3423,14 @@ func (v *__NotificationsInput) GetFirst() int { return v.First }
 // GetAfter returns __NotificationsInput.After, and is useful for accessing the field via an interface.
 func (v *__NotificationsInput) GetAfter() string { return v.After }
 
+// __TeamMembersInput is used internally by genqlient
+type __TeamMembersInput struct {
+	TeamId string `json:"teamId"`
+}
+
+// GetTeamId returns __TeamMembersInput.TeamId, and is useful for accessing the field via an interface.
+func (v *__TeamMembersInput) GetTeamId() string { return v.TeamId }
+
 // The mutation executed by AttachmentLinkURL.
 const AttachmentLinkURL_Operation = `
 mutation AttachmentLinkURL ($issueId: String!, $url: String!, $title: String) {
@@ -3427,6 +3498,7 @@ fragment UserFields on User {
 	email
 	isMe
 	active
+	avatarUrl
 }
 `
 
@@ -3518,6 +3590,7 @@ fragment UserFields on User {
 	email
 	isMe
 	active
+	avatarUrl
 }
 `
 
@@ -3585,7 +3658,7 @@ fragment IssueFields on Issue {
 	team {
 		... TeamRef
 	}
-	labels(first: 50) {
+	labels(first: 20) {
 		nodes {
 			... LabelFields
 		}
@@ -3598,6 +3671,11 @@ fragment IssueFields on Issue {
 	}
 	projectMilestone {
 		... MilestoneRef
+	}
+	parent {
+		id
+		identifier
+		title
 	}
 }
 fragment StateFields on WorkflowState {
@@ -3614,6 +3692,7 @@ fragment UserFields on User {
 	email
 	isMe
 	active
+	avatarUrl
 }
 fragment TeamRef on Team {
 	id
@@ -3790,7 +3869,7 @@ query GetIssue ($id: String!) {
 			identifier
 			title
 		}
-		children(first: 100) {
+		children(first: 50) {
 			nodes {
 				... IssueFields
 			}
@@ -3860,7 +3939,7 @@ fragment IssueFields on Issue {
 	team {
 		... TeamRef
 	}
-	labels(first: 50) {
+	labels(first: 20) {
 		nodes {
 			... LabelFields
 		}
@@ -3874,6 +3953,11 @@ fragment IssueFields on Issue {
 	projectMilestone {
 		... MilestoneRef
 	}
+	parent {
+		id
+		identifier
+		title
+	}
 }
 fragment UserFields on User {
 	id
@@ -3882,6 +3966,7 @@ fragment UserFields on User {
 	email
 	isMe
 	active
+	avatarUrl
 }
 fragment StateFields on WorkflowState {
 	id
@@ -4008,6 +4093,7 @@ fragment UserFields on User {
 	email
 	isMe
 	active
+	avatarUrl
 }
 fragment TeamRef on Team {
 	id
@@ -4051,6 +4137,7 @@ query GetViewer {
 		id
 		name
 		urlKey
+		logoUrl
 	}
 }
 fragment UserFields on User {
@@ -4060,6 +4147,7 @@ fragment UserFields on User {
 	email
 	isMe
 	active
+	avatarUrl
 }
 `
 
@@ -4147,7 +4235,7 @@ fragment IssueFields on Issue {
 	team {
 		... TeamRef
 	}
-	labels(first: 50) {
+	labels(first: 20) {
 		nodes {
 			... LabelFields
 		}
@@ -4160,6 +4248,11 @@ fragment IssueFields on Issue {
 	}
 	projectMilestone {
 		... MilestoneRef
+	}
+	parent {
+		id
+		identifier
+		title
 	}
 }
 fragment StateFields on WorkflowState {
@@ -4176,6 +4269,7 @@ fragment UserFields on User {
 	email
 	isMe
 	active
+	avatarUrl
 }
 fragment TeamRef on Team {
 	id
@@ -4266,7 +4360,7 @@ fragment IssueFields on Issue {
 	team {
 		... TeamRef
 	}
-	labels(first: 50) {
+	labels(first: 20) {
 		nodes {
 			... LabelFields
 		}
@@ -4279,6 +4373,11 @@ fragment IssueFields on Issue {
 	}
 	projectMilestone {
 		... MilestoneRef
+	}
+	parent {
+		id
+		identifier
+		title
 	}
 }
 fragment StateFields on WorkflowState {
@@ -4295,6 +4394,7 @@ fragment UserFields on User {
 	email
 	isMe
 	active
+	avatarUrl
 }
 fragment TeamRef on Team {
 	id
@@ -4453,7 +4553,7 @@ fragment IssueFields on Issue {
 	team {
 		... TeamRef
 	}
-	labels(first: 50) {
+	labels(first: 20) {
 		nodes {
 			... LabelFields
 		}
@@ -4466,6 +4566,11 @@ fragment IssueFields on Issue {
 	}
 	projectMilestone {
 		... MilestoneRef
+	}
+	parent {
+		id
+		identifier
+		title
 	}
 }
 fragment StateFields on WorkflowState {
@@ -4482,6 +4587,7 @@ fragment UserFields on User {
 	email
 	isMe
 	active
+	avatarUrl
 }
 fragment TeamRef on Team {
 	id
@@ -4577,7 +4683,7 @@ fragment IssueFields on Issue {
 	team {
 		... TeamRef
 	}
-	labels(first: 50) {
+	labels(first: 20) {
 		nodes {
 			... LabelFields
 		}
@@ -4590,6 +4696,11 @@ fragment IssueFields on Issue {
 	}
 	projectMilestone {
 		... MilestoneRef
+	}
+	parent {
+		id
+		identifier
+		title
 	}
 }
 fragment StateFields on WorkflowState {
@@ -4606,6 +4717,7 @@ fragment UserFields on User {
 	email
 	isMe
 	active
+	avatarUrl
 }
 fragment TeamRef on Team {
 	id
@@ -4815,6 +4927,8 @@ fragment NotificationFields on Notification {
 			id
 			body
 		}
+		parentCommentId
+		reactionEmoji
 	}
 }
 fragment UserFields on User {
@@ -4824,6 +4938,7 @@ fragment UserFields on User {
 	email
 	isMe
 	active
+	avatarUrl
 }
 fragment IssueFields on Issue {
 	id
@@ -4847,7 +4962,7 @@ fragment IssueFields on Issue {
 	team {
 		... TeamRef
 	}
-	labels(first: 50) {
+	labels(first: 20) {
 		nodes {
 			... LabelFields
 		}
@@ -4860,6 +4975,11 @@ fragment IssueFields on Issue {
 	}
 	projectMilestone {
 		... MilestoneRef
+	}
+	parent {
+		id
+		identifier
+		title
 	}
 }
 fragment StateFields on WorkflowState {
@@ -4968,6 +5088,7 @@ fragment UserFields on User {
 	email
 	isMe
 	active
+	avatarUrl
 }
 fragment TeamRef on Team {
 	id
@@ -4997,10 +5118,57 @@ func Projects(
 	return data_, err_
 }
 
+// The query executed by TeamMembers.
+const TeamMembers_Operation = `
+query TeamMembers ($teamId: String!) {
+	team(id: $teamId) {
+		members(first: 250) {
+			nodes {
+				... UserFields
+			}
+		}
+	}
+}
+fragment UserFields on User {
+	id
+	name
+	displayName
+	email
+	isMe
+	active
+	avatarUrl
+}
+`
+
+func TeamMembers(
+	ctx_ context.Context,
+	client_ graphql.Client,
+	teamId string,
+) (data_ *TeamMembersResponse, err_ error) {
+	req_ := &graphql.Request{
+		OpName: "TeamMembers",
+		Query:  TeamMembers_Operation,
+		Variables: &__TeamMembersInput{
+			TeamId: teamId,
+		},
+	}
+
+	data_ = &TeamMembersResponse{}
+	resp_ := &graphql.Response{Data: data_}
+
+	err_ = client_.MakeRequest(
+		ctx_,
+		req_,
+		resp_,
+	)
+
+	return data_, err_
+}
+
 // The query executed by Teams.
 const Teams_Operation = `
 query Teams {
-	teams(first: 100) {
+	teams(first: 50) {
 		nodes {
 			... TeamFull
 		}
@@ -5014,14 +5182,9 @@ fragment TeamFull on Team {
 	issueEstimationType
 	issueEstimationAllowZero
 	issueEstimationExtended
-	states(first: 100) {
+	states(first: 50) {
 		nodes {
 			... StateFields
-		}
-	}
-	members(first: 250) {
-		nodes {
-			... UserFields
 		}
 	}
 	activeCycle {
@@ -5034,14 +5197,6 @@ fragment StateFields on WorkflowState {
 	type
 	color
 	position
-}
-fragment UserFields on User {
-	id
-	name
-	displayName
-	email
-	isMe
-	active
 }
 fragment CycleRef on Cycle {
 	id

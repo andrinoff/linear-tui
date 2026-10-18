@@ -6,8 +6,13 @@ default_team = "ENG"
 # Background refresh of the current view and inbox badge. "0s" disables it.
 refresh_interval = "60s"
 
-# auto | dark | light
+# auto | dark | light | <name> of a file in themes/ (for example "mono" for
+# themes/mono.toml next to this file).
 theme = "auto"
+
+# Avatars and workspace logos via the kitty graphics protocol:
+# auto (kitty or Ghostty, not inside tmux) | on | off
+images = "auto"
 
 # Editor for descriptions and comments (falls back to $VISUAL, $EDITOR, vi).
 editor = "nvim"

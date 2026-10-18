@@ -16,6 +16,7 @@ type Config struct {
 	DefaultTeam     string              `toml:"default_team"`
 	RefreshInterval string              `toml:"refresh_interval"`
 	Theme           string              `toml:"theme"`
+	Images          string              `toml:"images"`
 	Editor          string              `toml:"editor"`
 	OAuth           OAuth               `toml:"oauth"`
 	Keys            map[string][]string `toml:"keys"`
@@ -40,6 +41,7 @@ func Default() Config {
 	return Config{
 		RefreshInterval: "60s",
 		Theme:           "auto",
+		Images:          "auto",
 		Git:             Git{OpenFromBranch: true},
 	}
 }
@@ -86,6 +88,12 @@ func Dir() (string, error) { return xdg("XDG_CONFIG_HOME", os.UserConfigDir) }
 
 // StateDir holds runtime state such as recent issues.
 func StateDir() (string, error) { return xdg("XDG_STATE_HOME", os.UserConfigDir) }
+
+// ThemesDir holds custom theme files (<name>.toml).
+func ThemesDir() (string, error) {
+	d, err := Dir()
+	return filepath.Join(d, "themes"), err
+}
 
 func Path() (string, error) {
 	d, err := Dir()

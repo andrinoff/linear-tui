@@ -24,6 +24,8 @@ type Ctx struct {
 	Keys   *Keys
 	Viewer *linear.Viewer
 	Repo   git.Repo
+	// Teams are the workspace teams, for the sidebar.
+	Teams []linear.Team
 	// Team is the team currently in focus, used as a default for new issues
 	// and team-scoped views.
 	Team *linear.Team

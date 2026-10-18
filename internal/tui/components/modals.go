@@ -53,7 +53,7 @@ func (c *Confirm) Update(msg tea.Msg) tea.Cmd {
 
 func (c *Confirm) View() string {
 	t := c.ctx.Theme
-	return t.Modal.Width(c.w).Render(t.Title.Render(c.text) + "\n\n" + t.StatusKey.Render("y") + t.Dim.Render(" yes   ") + t.StatusKey.Render("n") + t.Dim.Render(" no"))
+	return t.Box(t.Title.Render(c.text)+"\n\n"+t.StatusKey.Render("y")+t.Dim.Render(" yes   ")+t.StatusKey.Render("n")+t.Dim.Render(" no"), c.w, t.Border)
 }
 
 // Prompt asks for a single line of text.
@@ -99,7 +99,7 @@ func (p *Prompt) Update(msg tea.Msg) tea.Cmd {
 
 func (p *Prompt) View() string {
 	t := p.ctx.Theme
-	return t.Modal.Width(p.w).Render(t.Title.Render(p.title) + "\n" + p.input.View())
+	return t.Box(t.Title.Render(p.title)+"\n"+p.input.View(), p.w, t.Border)
 }
 
 // Composer edits multi-line markdown, for comments.
@@ -214,8 +214,8 @@ func EditorCmd(editor, text string) (*exec.Cmd, string, error) {
 
 func (c *Composer) View() string {
 	t := c.ctx.Theme
-	return t.Modal.Width(c.w).Render(t.Title.Render(c.title) + "\n" + c.area.View() + "\n" +
-		t.Dim.Render("ctrl+s send · ctrl+e $EDITOR · esc cancel"))
+	return t.Box(t.Title.Render(c.title)+"\n"+c.area.View()+"\n"+
+		t.Dim.Render("ctrl+s send · ctrl+e $EDITOR · esc cancel"), c.w, t.Border)
 }
 
 // HelpOverlay shows every binding grouped by area.
@@ -264,5 +264,6 @@ func (h *HelpOverlay) View() string {
 		cols = append(cols, lipgloss.NewStyle().MarginRight(3).Render(strings.Join(lines, "\n")))
 	}
 	body := lipgloss.JoinHorizontal(lipgloss.Top, cols...)
-	return t.Modal.Render(t.Title.Render("Keyboard shortcuts") + "\n\n" + body + "\n\n" + t.Dim.Render("press any key to close"))
+	content := t.Title.Render("Keyboard shortcuts") + "\n\n" + body + "\n\n" + t.Dim.Render("press any key to close")
+	return t.Box(content, min(h.w, lipgloss.Width(content)+4), t.Border)
 }

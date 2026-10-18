@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -127,5 +128,39 @@ func TestParseIdentifier(t *testing.T) {
 		if got != want {
 			t.Errorf("ParseIdentifier(%q) = %q, want %q", in, got, want)
 		}
+	}
+}
+
+func TestFetchFallsBackToAnonymous(t *testing.T) {
+	var calls []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls = append(calls, r.Header.Get("Authorization"))
+		if r.Header.Get("Accept") == "" || r.Header.Get("Authorization") != "" {
+			w.WriteHeader(http.StatusForbidden)
+			return
+		}
+		io.WriteString(w, "img")
+	}))
+	defer srv.Close()
+	svc := NewService(nil)
+	svc.HTTP = &http.Client{Transport: &APIKeyTransport{Key: "k", Base: srv.Client().Transport}}
+	// Route the "linear.app" host to the test server.
+	u := strings.Replace(srv.URL, "127.0.0.1", "uploads.linear.app", 1)
+	dial := srv.Client().Transport.(*http.Transport).Clone()
+	addr := strings.TrimPrefix(srv.URL, "http://")
+	dial.DialContext = func(ctx context.Context, network, _ string) (net.Conn, error) {
+		return (&net.Dialer{}).DialContext(ctx, network, addr)
+	}
+	svc.HTTP.Transport = &APIKeyTransport{Key: "k", Base: dial}
+	old := http.DefaultClient
+	http.DefaultClient = &http.Client{Transport: dial}
+	defer func() { http.DefaultClient = old }()
+
+	data, err := svc.Fetch(context.Background(), u+"/avatar.png")
+	if err != nil || string(data) != "img" {
+		t.Fatalf("Fetch = %q, %v", data, err)
+	}
+	if len(calls) != 2 || calls[0] != "k" || calls[1] != "" {
+		t.Fatalf("calls = %q, want authenticated then anonymous", calls)
 	}
 }

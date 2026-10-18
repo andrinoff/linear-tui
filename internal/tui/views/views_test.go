@@ -1,6 +1,9 @@
 package views
 
 import (
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	"github.com/andrinoff/linear-tui/internal/config"
@@ -10,10 +13,14 @@ import (
 )
 
 func TestEditFormSendsOnlyChanges(t *testing.T) {
-	ctx := &common.Ctx{Cfg: config.Default(), Theme: theme.New(true), Keys: common.DefaultKeys()}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		io.WriteString(w, `{"data":{"team":{"members":{"nodes":[{"id":"u1","active":true}]}}}}`)
+	}))
+	defer srv.Close()
+	ctx := &common.Ctx{Cfg: config.Default(), Theme: theme.New(true), Keys: common.DefaultKeys(),
+		Svc: linear.NewService(linear.NewClient(srv.URL, http.DefaultTransport))}
 	me := linear.User{Id: "u1", Active: true}
 	team := linear.Team{Id: "t1"}
-	team.Members.Nodes = []linear.User{me}
 	team.States.Nodes = []linear.State{{Id: "s1"}, {Id: "s2"}}
 	iss := linear.Issue{Id: "i1", Title: "Old", Priority: 2, Estimate: 3, State: linear.State{Id: "s1"}, Team: linear.TeamRef{Id: "t1"}, Assignee: &me}
 	iss.Labels.Nodes = []linear.Label{{Id: "l1"}}

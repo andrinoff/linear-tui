@@ -3,7 +3,12 @@ package linear
 import (
 	"context"
 	"errors"
+	"fmt"
+	"io"
+	"net/http"
+	"net/url"
 	"slices"
+	"strings"
 	"sync"
 	"time"
 
@@ -40,11 +45,15 @@ type Page[T any] struct {
 type Service struct {
 	gql graphql.Client
 	ttl time.Duration
+	// HTTP is the authenticated client, used to download images hosted by
+	// Linear. Other hosts are fetched without credentials.
+	HTTP *http.Client
 
-	mu     sync.Mutex
-	viewer cached[*Viewer]
-	teams  cached[[]Team]
-	labels cached[[]Label]
+	mu      sync.Mutex
+	viewer  cached[*Viewer]
+	teams   cached[[]Team]
+	labels  cached[[]Label]
+	members map[string]*cached[[]User]
 }
 
 type cached[T any] struct {
@@ -58,11 +67,55 @@ func NewService(gql graphql.Client) *Service {
 	return &Service{gql: gql, ttl: 5 * time.Minute}
 }
 
+// Fetch downloads an image (an avatar or logo). Linear-hosted files are
+// requested with credentials first and anonymously if that is refused;
+// other hosts never receive credentials.
+func (s *Service) Fetch(ctx context.Context, rawURL string) ([]byte, error) {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return nil, err
+	}
+	host := u.Hostname()
+	clients := []*http.Client{http.DefaultClient}
+	if s.HTTP != nil && (host == "linear.app" || strings.HasSuffix(host, ".linear.app")) {
+		clients = []*http.Client{s.HTTP, http.DefaultClient}
+	}
+	var lastErr error
+	for _, c := range clients {
+		data, err := fetch(ctx, c, rawURL)
+		if err == nil {
+			return data, nil
+		}
+		lastErr = err
+	}
+	return nil, lastErr
+}
+
+func fetch(ctx context.Context, c *http.Client, rawURL string) ([]byte, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
+	if err != nil {
+		return nil, err
+	}
+	// Ask for formats we can decode so CDNs don't negotiate AVIF.
+	req.Header.Set("Accept", "image/png,image/jpeg,image/gif,image/webp;q=0.9")
+	req.Header.Set("User-Agent", "linear-tui")
+	resp, err := c.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("%s", resp.Status)
+	}
+	return io.ReadAll(io.LimitReader(resp.Body, 20<<20))
+}
+
 // Invalidate drops cached metadata so the next call refetches it.
 func (s *Service) Invalidate() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.viewer, s.teams, s.labels = cached[*Viewer]{}, cached[[]Team]{}, cached[[]Label]{}
+	s.members = nil
 }
 
 func load[T any](s *Service, c *cached[T], fetch func() (T, error)) (T, error) {
@@ -126,6 +179,28 @@ func (s *Service) Labels(ctx context.Context) ([]Label, error) {
 			return nil, err
 		}
 		return r.IssueLabels.Nodes, nil
+	})
+}
+
+// Members returns a team's members. They are fetched per team because
+// nesting them in the teams query exceeds Linear's complexity limit.
+func (s *Service) Members(ctx context.Context, teamID string) ([]User, error) {
+	s.mu.Lock()
+	if s.members == nil {
+		s.members = map[string]*cached[[]User]{}
+	}
+	c := s.members[teamID]
+	if c == nil {
+		c = &cached[[]User]{}
+		s.members[teamID] = c
+	}
+	s.mu.Unlock()
+	return load(s, c, func() ([]User, error) {
+		r, err := TeamMembers(ctx, s.gql, teamID)
+		if err != nil {
+			return nil, err
+		}
+		return r.Team.Members.Nodes, nil
 	})
 }
 

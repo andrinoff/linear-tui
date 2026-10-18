@@ -11,6 +11,7 @@ import (
 	"charm.land/bubbles/v2/spinner"
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 
 	"github.com/andrinoff/linear-tui/internal/linear"
 	"github.com/andrinoff/linear-tui/internal/tui/common"
@@ -490,6 +491,7 @@ func groupKey(g GroupBy, i *linear.Issue) string {
 	return ""
 }
 
+// groupHeader renders Linear's group band: icon, name, count, and "+".
 func (l *IssueList) groupHeader(i *linear.Issue, count int) string {
 	t := l.ctx.Theme
 	icon := ""
@@ -498,67 +500,69 @@ func (l *IssueList) groupHeader(i *linear.Issue, count int) string {
 		icon = t.StateIcon(i.State.Type, i.State.Color) + " "
 	case GroupPriority:
 		icon = t.Priority(i.Priority) + " "
+	case GroupAssignee:
+		name, url := "", ""
+		if i.Assignee != nil {
+			name, url = i.Assignee.DisplayName, i.Assignee.AvatarUrl
+		}
+		icon = t.Avatar(name, url) + " "
 	case GroupProject:
 		if i.Project != nil {
 			icon = t.Fgc(t.Hex(i.Project.Color), "◆") + " "
 		}
 	}
-	return icon + t.Group.Render(groupKey(l.group, i)) + " " + t.Dim.Render(fmt.Sprint(count))
+	left := "  " + icon + t.Group.Render(groupKey(l.group, i)) + " " + t.Dim.Render(fmt.Sprint(count))
+	right := t.Faint.Render("+  ")
+	return theme.Surface(common.Fit(left, l.w-lipgloss.Width(right))+right, l.w, t.CardBg)
 }
 
-type column struct {
-	title string
-	width int
-	cell  func(*linear.Issue) string
-}
-
-func (l *IssueList) columns() []column {
+// row renders an issue like Linear's list: priority, identifier, status,
+// title, then right-aligned chips, assignee, and date.
+func (l *IssueList) row(iss *linear.Issue, idW int, selected bool) string {
 	t := l.ctx.Theme
-	idW := 7
-	for _, i := range l.issues {
-		idW = max(idW, len(i.Identifier))
+	mark := "  "
+	if selected {
+		mark = t.Cursor.Render("☑ ")
+	} else if len(l.selected) > 0 {
+		mark = t.Faint.Render("☐ ")
 	}
-	cols := []column{
-		{"", 3, func(i *linear.Issue) string { return t.Priority(i.Priority) }},
-		{"ID", idW, func(i *linear.Issue) string { return t.Dim.Render(i.Identifier) }},
-		{"", 1, func(i *linear.Issue) string { return t.StateIcon(i.State.Type, i.State.Color) }},
-		{"Title", 0, func(i *linear.Issue) string { return i.Title }},
+	left := mark + t.Priority(iss.Priority) + "  " + common.Fit(t.Dim.Render(iss.Identifier), idW) + "  " +
+		t.StateIcon(iss.State.Type, iss.State.Color) + "  " + t.Bold.Render(iss.Title)
+	if iss.Parent != nil && l.w >= 100 {
+		left += t.Faint.Render(" › ") + t.Dim.Render(iss.Parent.Title)
 	}
-	if l.w >= 100 {
-		cols = append(cols, column{"Labels", 18, func(i *linear.Issue) string { return labelsInline(t, i.Labels.Nodes) }})
-	}
-	if l.w >= 70 {
-		cols = append(cols, column{"Assignee", 12, func(i *linear.Issue) string {
-			if i.Assignee == nil {
-				return t.Faint.Render("—")
+	var right []string
+	if l.w >= 90 {
+		var chips []string
+		if iss.Project != nil {
+			chips = append(chips, theme.Pill(t.Fgc(t.Hex(iss.Project.Color), "◆")+" "+t.Dim.Render(iss.Project.Name), t.ChipBg))
+		}
+		for _, lb := range iss.Labels.Nodes {
+			chips = append(chips, theme.Pill(t.Fgc(t.Hex(lb.Color), "●")+" "+t.Dim.Render(lb.Name), t.ChipBg))
+		}
+		if iss.DueDate != "" {
+			chips = append(chips, theme.Pill(t.Dim.Render("◷ ")+dueShort(t, iss.DueDate), t.ChipBg))
+		}
+		budget := l.w / 3
+		used := 0
+		for _, c := range chips {
+			if used+lipgloss.Width(c)+1 > budget {
+				break
 			}
-			return i.Assignee.DisplayName
-		}})
-	}
-	if l.w >= 100 {
-		cols = append(cols, column{"Est", 3, func(i *linear.Issue) string {
-			if i.Estimate == 0 {
-				return ""
-			}
-			return t.Dim.Render(fmt.Sprintf("%g", i.Estimate))
-		}})
-	}
-	if l.w >= 70 {
-		cols = append(cols, column{"Due", 6, func(i *linear.Issue) string { return dueShort(t, i.DueDate) }})
-	}
-	if l.w >= 100 {
-		cols = append(cols, column{"Upd", 4, func(i *linear.Issue) string { return t.Dim.Render(common.Ago(i.UpdatedAt)) }})
-	}
-	fixed := 2
-	for _, c := range cols {
-		fixed += c.width + 1
-	}
-	for i := range cols {
-		if cols[i].width == 0 {
-			cols[i].width = max(10, l.w-fixed)
+			right = append(right, c)
+			used += lipgloss.Width(c) + 1
 		}
 	}
-	return cols
+	avatar := t.Faint.Render("◌ ")
+	if iss.Assignee != nil {
+		avatar = t.Avatar(iss.Assignee.DisplayName, iss.Assignee.AvatarUrl)
+	}
+	right = append(right, avatar)
+	if l.w >= 70 {
+		right = append(right, t.Dim.Render(fmt.Sprintf("%6s", shortDate(iss.CreatedAt))))
+	}
+	r := strings.Join(right, " ") + "  "
+	return common.Fit(left, l.w-lipgloss.Width(r)-1) + " " + r
 }
 
 func labelsInline(t *theme.Theme, labels []linear.Label) string {
@@ -575,7 +579,7 @@ func (l *IssueList) View() string {
 	if len(l.chips) > 0 || len(l.selected) > 0 {
 		var parts []string
 		for _, c := range l.chips {
-			parts = append(parts, t.Chip.Render(c.label))
+			parts = append(parts, theme.Pill(t.Dim.Render(c.label), t.ChipBg))
 		}
 		if len(l.selected) > 0 {
 			parts = append(parts, t.Badge.Render(fmt.Sprintf("%d selected", len(l.selected))))
@@ -605,13 +609,10 @@ func (l *IssueList) View() string {
 		return common.FitLines(strings.Join(lines, "\n")+"\n"+l.footer(), l.h)
 	}
 
-	cols := l.columns()
-	var hdr strings.Builder
-	hdr.WriteString("  ")
-	for _, c := range cols {
-		hdr.WriteString(common.Fit(t.Header.Render(c.title), c.width) + " ")
+	idW := 7
+	for _, i := range l.issues {
+		idW = max(idW, len(i.Identifier))
 	}
-	lines = append(lines, hdr.String())
 
 	type row struct {
 		text  string
@@ -634,24 +635,9 @@ func (l *IssueList) View() string {
 		if vi == l.cursor {
 			cursorRow = len(rows)
 		}
-		var b strings.Builder
-		switch {
-		case vi == l.cursor:
-			b.WriteString(t.Cursor.Render("▌"))
-		default:
-			b.WriteString(" ")
-		}
-		if l.selected[iss.Id] {
-			b.WriteString(t.Cursor.Render("✓"))
-		} else {
-			b.WriteString(" ")
-		}
-		for _, c := range cols {
-			b.WriteString(common.Fit(c.cell(iss), c.width) + " ")
-		}
-		text := common.Fit(b.String(), l.w)
+		text := common.Fit(l.row(iss, idW, l.selected[iss.Id]), l.w)
 		if vi == l.cursor {
-			text = t.Selected.Render(text)
+			text = t.Select(text, l.w)
 		}
 		rows = append(rows, row{text: text, issue: vi})
 	}
@@ -683,7 +669,7 @@ func (l *IssueList) footer() string {
 	if l.group != GroupNone {
 		info += " · grouped by " + groupNames[l.group]
 	}
-	return t.Dim.Render(" " + info)
+	return t.Faint.Render("  " + info)
 }
 
 // filterPicker offers filter categories, then their values.

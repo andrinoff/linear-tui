@@ -7,25 +7,33 @@ import (
 
 // Filter is the subset of Linear's IssueFilter the TUI exposes.
 type Filter struct {
-	TeamID       string
-	CycleID      string
+	TeamID  string
+	CycleID string
+	// CycleActive and CycleNext select the team's current or upcoming cycle.
+	CycleActive  bool
+	CycleNext    bool
 	ProjectID    string
 	AssignedToMe bool
-	Unassigned   bool
-	AssigneeIDs  []string
-	StateTypes   []string
-	StateIDs     []string
-	LabelIDs     []string
-	Priorities   []int
-	HasDueDate   bool
-	Search       string
+	CreatedByMe  bool
+	SubscribedBy bool
+	// RecentDone keeps active issues plus those completed in the past week,
+	// like Linear's default board display options.
+	RecentDone  bool
+	Unassigned  bool
+	AssigneeIDs []string
+	StateTypes  []string
+	StateIDs    []string
+	LabelIDs    []string
+	Priorities  []int
+	HasDueDate  bool
+	Search      string
 }
 
 func (f Filter) IsZero() bool {
 	return f.TeamID == "" && f.CycleID == "" && f.ProjectID == "" && !f.AssignedToMe &&
 		!f.Unassigned && len(f.AssigneeIDs) == 0 && len(f.StateTypes) == 0 &&
 		len(f.StateIDs) == 0 && len(f.LabelIDs) == 0 && len(f.Priorities) == 0 &&
-		!f.HasDueDate && f.Search == ""
+		!f.HasDueDate && f.Search == "" && !f.CreatedByMe && !f.SubscribedBy && !f.RecentDone && !f.CycleActive && !f.CycleNext
 }
 
 func in[T any](vals []T) Input { return Input{"in": vals} }
@@ -42,8 +50,27 @@ func (f Filter) Input() Input {
 	if f.CycleID != "" {
 		and = append(and, Input{"cycle": eqID(f.CycleID)})
 	}
+	if f.CycleActive {
+		and = append(and, Input{"cycle": Input{"isActive": Input{"eq": true}}})
+	}
+	if f.CycleNext {
+		and = append(and, Input{"cycle": Input{"isNext": Input{"eq": true}}})
+	}
 	if f.ProjectID != "" {
 		and = append(and, Input{"project": eqID(f.ProjectID)})
+	}
+	me := Input{"isMe": Input{"eq": true}}
+	if f.CreatedByMe {
+		and = append(and, Input{"creator": me})
+	}
+	if f.SubscribedBy {
+		and = append(and, Input{"subscribers": Input{"some": me}})
+	}
+	if f.RecentDone {
+		and = append(and, Input{"or": []Input{
+			{"state": Input{"type": in(ActiveStateTypes)}},
+			{"state": Input{"type": Input{"eq": "completed"}}, "completedAt": Input{"gt": "-P1W"}},
+		}})
 	}
 	var assignee []Input
 	if f.AssignedToMe {
@@ -95,6 +122,9 @@ func (f Filter) Input() Input {
 	}
 	return Input{"and": and}
 }
+
+// ActiveStateTypes are the workflow state types of open issues.
+var ActiveStateTypes = []string{"triage", "backlog", "unstarted", "started"}
 
 var identifierRe = regexp.MustCompile(`(?i)\b([a-z][a-z0-9]{0,6})-(\d+)\b`)
 

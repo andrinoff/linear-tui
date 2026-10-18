@@ -79,6 +79,8 @@ linear-tui --no-branch
 
 | Lists | |
 |---|---|
+| `ctrl+b` | switch between list and board (remembered per page) |
+| `t` / `T` | next / previous tab (Assigned, Created, Subscribed…) |
 | `j` / `k`, `enter` | move, open |
 | `/` | filter loaded rows |
 | `f` / `F` | add filter / clear filters |
@@ -97,7 +99,7 @@ linear-tui --no-branch
 
 | Board | Detail | Inbox |
 |---|---|---|
-| `h` `l` columns, `<` `>` move card, `.` show done | `n` / `N` next/prev link, `enter` follow or reply | `u` read, `z` snooze, `d` archive, `M` mark all read |
+| `h` `l` columns, `<` `>` move card, `.` show canceled and older done | `n` / `N` next/prev link, `enter` follow or reply | `u` read, `z` snooze, `d` archive, `M` mark all read |
 
 ## Configuration
 
@@ -105,6 +107,38 @@ linear-tui --no-branch
 `~/Library/Application Support/linear-tui/`). See
 [`config.example.toml`](config.example.toml) for every option, including key
 overrides.
+
+### Themes
+
+The built-in theme follows Linear's palette and leaves the background
+transparent. To make your own, add `themes/<name>.toml` to the config directory
+and set `theme = "<name>"`. Keys you leave out fall back to the built-in
+palette:
+
+```toml
+dark = true
+monochrome = true     # gray labels/projects/teams; status icons and avatars keep color
+background = ""       # "" is transparent; set a hex color to paint it
+panel = ""
+card = "#161616"
+card_focus = "#262626"
+chip = "#222222"
+selection = "#232323"
+accent = "#FFFFFF"
+text = "#C4C4C4"
+muted = "#8A8A8A"
+border = "#2E2E2E"
+```
+
+The other keys are `chip_focus`, `modal`, `bright`, `subtle`, `red`, `orange`,
+`yellow`, `green` and `blue`.
+
+### Images
+
+In kitty and Ghostty, avatars and the workspace logo are drawn as real images
+through the kitty graphics protocol (Unicode placeholders). Elsewhere they fall
+back to initials. Use `images = "on"` or `"off"` to override detection. To see
+why an image isn't shown, run with `LINEAR_TUI_DEBUG=/tmp/linear-tui.log`.
 
 ## Development
 

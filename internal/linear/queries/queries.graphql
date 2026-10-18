@@ -7,14 +7,26 @@ query GetViewer {
     id
     name
     urlKey
+    logoUrl
   }
 }
 
 query Teams {
-  teams(first: 100) {
+  teams(first: 50) {
     # @genqlient(flatten: true)
     nodes {
       ...TeamFull
+    }
+  }
+}
+
+query TeamMembers($teamId: String!) {
+  team(id: $teamId) {
+    members(first: 250) {
+      # @genqlient(flatten: true)
+      nodes {
+        ...UserFields
+      }
     }
   }
 }
@@ -61,7 +73,7 @@ query GetIssue($id: String!) {
       identifier
       title
     }
-    children(first: 100) {
+    children(first: 50) {
       # @genqlient(flatten: true)
       nodes {
         ...IssueFields

@@ -73,7 +73,12 @@ func rootCmd() *cobra.Command {
 				e.cfg.Git.OpenFromBranch = false
 			}
 			app := tui.New(tui.Options{Cfg: e.cfg, Store: e.store, Endpoint: e.endpoint, OAuth: e.oauth, OpenIssue: issue})
-			_, err = tea.NewProgram(app).Run()
+			p := tea.NewProgram(app)
+			app.SetSender(p.Send)
+			_, err = p.Run()
+			if seq := app.Cleanup(); seq != "" {
+				fmt.Print(seq)
+			}
 			if serr := app.Save(); serr != nil && err == nil {
 				fmt.Fprintln(os.Stderr, "warning: could not save state:", serr)
 			}

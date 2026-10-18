@@ -39,7 +39,8 @@ func itoa(n int) string { b, _ := json.Marshal(n); return string(b) }
 
 var fixtures = map[string]string{
 	"GetViewer":   `{"viewer":` + userMe + `,"organization":{"id":"org","name":"Acme","urlKey":"acme"}}`,
-	"Teams":       `{"teams":{"nodes":[{"id":"team-eng","key":"ENG","name":"Engineering","cyclesEnabled":true,"issueEstimationType":"fibonacci","issueEstimationAllowZero":false,"issueEstimationExtended":false,"states":{"nodes":[` + stDone + `,` + stTodo + `,` + stProgress + `]},"members":{"nodes":[` + userMe + `,` + userBob + `]},"activeCycle":null}]}}`,
+	"Teams":       `{"teams":{"nodes":[{"id":"team-eng","key":"ENG","name":"Engineering","cyclesEnabled":true,"issueEstimationType":"fibonacci","issueEstimationAllowZero":false,"issueEstimationExtended":false,"states":{"nodes":[` + stDone + `,` + stTodo + `,` + stProgress + `]},"activeCycle":null}]}}`,
+	"TeamMembers": `{"team":{"members":{"nodes":[` + userMe + `,` + userBob + `]}}}`,
 	"Labels":      `{"issueLabels":{"nodes":[{"id":"lb-bug","name":"Bug","color":"#eb5757","team":null}]}}`,
 	"UnreadCount": `{"notificationsUnreadCount":1}`,
 	"Issues": `{"issues":{"nodes":[` + issueJSON("i1", "ENG-1", "Fix login crash", stTodo, 3) + `,` +
@@ -140,6 +141,7 @@ func newHarness(t *testing.T) *harness {
 	cfg := config.Default()
 	cfg.Git.OpenFromBranch = false
 	cfg.Theme = "dark"
+	cfg.Images = "off"
 	svc := linear.NewService(linear.NewClient(srv.URL, http.DefaultTransport))
 	h := &harness{t: t, app: New(Options{Cfg: cfg, Service: svc}), fake: fake, msgs: make(chan tea.Msg, 256)}
 	h.exec(h.app.Init())

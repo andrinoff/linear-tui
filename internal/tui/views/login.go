@@ -231,6 +231,6 @@ func (l *Login) View() string {
 	if l.err != nil {
 		b.WriteString("\n\n" + t.Error.Render(l.err.Error()))
 	}
-	box := t.Modal.Width(min(80, l.w-4)).Padding(1, 2).Render(b.String())
+	box := t.Box("\n"+b.String()+"\n", min(80, l.w-4), t.Border)
 	return lipgloss.Place(l.w, l.h, lipgloss.Center, lipgloss.Center, box)
 }

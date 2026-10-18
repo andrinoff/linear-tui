@@ -3,6 +3,7 @@ package views
 import (
 	"fmt"
 	"math"
+	"slices"
 	"time"
 
 	"charm.land/bubbles/v2/key"
@@ -103,7 +104,7 @@ func (c *Cycles) Update(msg tea.Msg) tea.Cmd {
 			l := NewIssueList(c.ctx, c.team.Key+" › "+name, linear.Filter{TeamID: c.team.Id, CycleID: cy.Id}, nil).WithGroup(GroupState)
 			return common.Cmd(common.PushMsg{View: l})
 		case msg.String() == "b":
-			return common.Cmd(common.PushMsg{View: NewBoard(c.ctx, c.team, cy.Id, c.team.Key+" › "+name+" board")})
+			return common.Cmd(common.PushMsg{View: NewBoard(c.ctx, c.team, linear.Filter{CycleID: cy.Id}, name)})
 		}
 	}
 	return nil
@@ -159,6 +160,7 @@ func (c *Cycles) View() string {
 type Projects struct {
 	cursorList
 	projects []linear.Project
+	team     *linear.Team
 }
 
 type projectsLoadedMsg struct {
@@ -170,7 +172,17 @@ type projectsLoadedMsg struct {
 
 func NewProjects(ctx *common.Ctx) *Projects { return &Projects{cursorList: newCursorList(ctx)} }
 
-func (p *Projects) Title() string { return "Projects" }
+// NewTeamProjects lists projects the team is part of.
+func NewTeamProjects(ctx *common.Ctx, team *linear.Team) *Projects {
+	return &Projects{cursorList: newCursorList(ctx), team: team}
+}
+
+func (p *Projects) Title() string {
+	if p.team != nil {
+		return p.team.Name + " › Projects"
+	}
+	return "Projects"
+}
 func (p *Projects) Help() []key.Binding {
 	k := p.ctx.Keys
 	return []key.Binding{k.Enter, k.Open, k.Refresh}
@@ -202,7 +214,13 @@ func (p *Projects) Update(msg tea.Msg) tea.Cmd {
 		if msg.err != nil {
 			return common.Err(msg.err)
 		}
-		p.projects, p.n = msg.projects, len(msg.projects)
+		p.projects = msg.projects
+		if p.team != nil {
+			p.projects = slices.DeleteFunc(p.projects, func(pr linear.Project) bool {
+				return !slices.ContainsFunc(pr.Teams.Nodes, func(t linear.TeamRef) bool { return t.Id == p.team.Id })
+			})
+		}
+		p.n = len(p.projects)
 	case common.RefreshMsg:
 		return p.load()
 	case tea.KeyPressMsg:

@@ -95,7 +95,7 @@ func (c *cursorList) render(header []string, empty string, row func(i int, focus
 			focused := i == c.cursor
 			text := row(i, focused)
 			if focused {
-				text = t.Selected.Render(common.Fit(t.Cursor.Render("▌")+text, c.w))
+				text = t.Select(" "+text, c.w)
 			} else {
 				text = common.Fit(" "+text, c.w)
 			}

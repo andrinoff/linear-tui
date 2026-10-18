@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -9,18 +10,23 @@ import (
 
 func TestBootShowsMyIssues(t *testing.T) {
 	h := newHarness(t)
-	h.contains("Acme", "Engineering", "My issues", "ENG-1", "Fix login crash", "ENG-2", "Add dark mode", "status: active", "Todo")
-	if c := h.fake.called("Issues"); len(c) == 0 {
+	h.contains("Acme", "Engineering", "My issues", "Assigned", "Created", "Subscribed",
+		"Todo 1", "In Progress 1", "ENG-1", "Fix login crash", "ENG-2", "Add dark mode", "Created Jan 1", "Bug")
+	c := h.fake.called("Issues")
+	if len(c) == 0 {
 		t.Fatal("Issues was not requested")
-	} else if f, _ := c[0].vars["filter"].(map[string]any); f == nil {
-		t.Fatalf("expected a filter, got %v", c[0].vars)
+	}
+	f, _ := json.Marshal(c[0].vars["filter"])
+	if !strings.Contains(string(f), `"isMe"`) || !strings.Contains(string(f), `"-P1W"`) {
+		t.Fatalf("expected assigned-to-me with recent done, got %s", f)
 	}
 }
 
 func TestOpenDetail(t *testing.T) {
 	h := newHarness(t)
 	h.keys("enter")
-	h.contains("My issues › ENG-1", "cannot", "log in after the update", "Comments (1)", "Reproduced on staging.", "Creator", "bob")
+	h.contains("My issues  ›  ENG-1", "Fix login crash", "cannot", "log in after the update", "Properties", "Status", "Priority",
+		"Activity", "Reproduced on staging.", "Created by bob")
 	h.keys("esc")
 	h.contains("Add dark mode")
 	h.lacks("Reproduced on staging.")
@@ -40,7 +46,7 @@ func TestOptimisticPriorityChange(t *testing.T) {
 	if in["priority"] != float64(1) || calls[0].vars["id"] != "i1" {
 		t.Fatalf("update vars = %v", calls[0].vars)
 	}
-	h.contains("!!!")
+	h.contains(" ! ")
 }
 
 func TestOptimisticRevertOnError(t *testing.T) {
@@ -48,12 +54,12 @@ func TestOptimisticRevertOnError(t *testing.T) {
 	h.fake.override("IssueUpdate", `{"errors":[{"message":"nope","extensions":{"userPresentableMessage":"Issue is locked"}}]}`)
 	h.keys("p", "down", "enter")
 	h.contains("Issue is locked")
-	h.lacks("!!!")
+	h.lacks(" ! ")
 }
 
 func TestAssignAndClearSelection(t *testing.T) {
 	h := newHarness(t)
-	h.keys("x", "x")
+	h.keys("ctrl+b", "x", "x")
 	h.contains("2 selected")
 	h.keys("a")
 	h.contains("Assign to", "Unassigned", "bob")
@@ -66,11 +72,12 @@ func TestAssignAndClearSelection(t *testing.T) {
 
 func TestNavigateBoardAndCycles(t *testing.T) {
 	h := newHarness(t)
+	h.send(tea.WindowSizeMsg{Width: 160, Height: 40})
 	h.keys("g", "b")
-	h.contains("Engineering board", "Todo", "In Progress", "Fix login crash")
-	h.lacks("Done 0")
+	h.contains("Todo 1", "In Progress 1", "Done 0 Past week", "Fix login crash", "hidden by display options")
 	h.keys(".")
-	h.contains("Done")
+	h.contains("Done 0", "Showing all issues")
+	h.lacks("Past week")
 	h.keys("g", "c")
 	h.contains("Cycle 7", "current", "50%")
 	h.keys("g", "p")
@@ -95,7 +102,7 @@ func TestInboxMarksRead(t *testing.T) {
 func TestPaletteNavigates(t *testing.T) {
 	h := newHarness(t)
 	h.keys("ctrl+k")
-	h.contains("Command palette", "Go to Board")
+	h.contains("Command palette", "Go to Team board")
 	h.typeText("projects")
 	h.keys("enter")
 	h.lacks("Command palette")
@@ -135,10 +142,11 @@ func TestQuitFromRoot(t *testing.T) {
 
 func TestNarrowListHidesColumns(t *testing.T) {
 	h := newHarness(t)
+	h.keys("ctrl+b")
 	h.send(tea.WindowSizeMsg{Width: 140, Height: 40})
-	h.contains("Labels", "Assignee", "Bug")
+	h.contains("Fix login crash", "Bug", "Jan 1")
 	h.send(tea.WindowSizeMsg{Width: 94, Height: 30})
-	if s := h.screen(); strings.Contains(s, "Labels") {
+	if s := h.screen(); strings.Contains(s, "Bug") {
 		t.Fatalf("labels column should hide when narrow:\n%s", s)
 	}
 }
@@ -160,7 +168,7 @@ func TestCreateIssueFlow(t *testing.T) {
 		t.Fatalf("IssueCreate calls = %d", len(calls))
 	}
 	in := calls[0].vars["input"].(map[string]any)
-	if in["teamId"] != "team-eng" || in["title"] != "New bug" || len(in) != 2 {
+	if in["teamId"] != "team-eng" || in["title"] != "New bug" || in["stateId"] != "st-todo" || in["assigneeId"] != "u-me" || len(in) != 4 {
 		t.Fatalf("create input = %v", in)
 	}
 	h.contains("Created ENG-9")
@@ -185,7 +193,7 @@ func TestPasteIntoAPIKeyField(t *testing.T) {
 
 func TestPasteIntoListFilter(t *testing.T) {
 	h := newHarness(t)
-	h.keys("/")
+	h.keys("ctrl+b", "/")
 	h.send(tea.PasteMsg{Content: "dark"})
 	h.contains("/dark", "Add dark mode")
 	h.lacks("Fix login crash")

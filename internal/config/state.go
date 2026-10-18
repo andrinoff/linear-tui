@@ -20,6 +20,9 @@ type State struct {
 	LastTeam string        `json:"last_team"`
 	LastView string        `json:"last_view"`
 	Recent   []RecentIssue `json:"recent"`
+	// Layouts remembers list or board per screen, like Linear's per-view
+	// display options.
+	Layouts map[string]string `json:"layouts,omitempty"`
 
 	path string
 }

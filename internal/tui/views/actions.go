@@ -132,7 +132,7 @@ func StateItems(t *theme.Theme, states []linear.State, current string) []compone
 }
 
 func memberItems(ctx *common.Ctx, teamID string, withNone bool) ([]components.Item, error) {
-	team, err := ctx.Svc.Team(bg(), teamID)
+	members, err := ctx.Svc.Members(bg(), teamID)
 	if err != nil {
 		return nil, err
 	}
@@ -140,7 +140,7 @@ func memberItems(ctx *common.Ctx, teamID string, withNone bool) ([]components.It
 	if withNone {
 		items = append(items, components.Item{Prefix: ctx.Theme.Dim.Render("∅"), Label: "Unassigned"})
 	}
-	for _, u := range team.Members.Nodes {
+	for _, u := range members {
 		if !u.Active {
 			continue
 		}

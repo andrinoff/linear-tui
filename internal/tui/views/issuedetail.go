@@ -20,13 +20,16 @@ import (
 // IssueDetail shows one issue: metadata, description, sub-issues,
 // relations, attachments, and comments.
 type IssueDetail struct {
-	ctx     *common.Ctx
-	id      string
-	preview *linear.Issue
-	detail  *linear.IssueDetail
-	err     error
-	loading bool
-	reqID   int
+	ctx *common.Ctx
+	// Embedded is set when the detail is a preview pane inside another
+	// view, so removing the issue doesn't pop the screen.
+	Embedded bool
+	id       string
+	preview  *linear.Issue
+	detail   *linear.IssueDetail
+	err      error
+	loading  bool
+	reqID    int
 
 	vp    viewport.Model
 	spin  spinner.Model
@@ -90,9 +93,19 @@ func (d *IssueDetail) Title() string {
 
 func (d *IssueDetail) Capturing() bool { return false }
 
+// propsW is the width of Linear's properties pane, shown on wide screens.
+const propsW = 34
+
+func (d *IssueDetail) paneW() int {
+	if d.w >= 80 {
+		return propsW
+	}
+	return 0
+}
+
 func (d *IssueDetail) SetSize(w, h int) {
 	d.w, d.h = w, h
-	d.vp.SetWidth(w)
+	d.vp.SetWidth(w - d.paneW())
 	d.vp.SetHeight(h)
 	d.renderContent()
 }
@@ -151,7 +164,7 @@ func (d *IssueDetail) Update(msg tea.Msg) tea.Cmd {
 		}
 		return nil
 	case common.IssueRemovedMsg:
-		if msg.ID == d.id {
+		if msg.ID == d.id && !d.Embedded {
 			return common.Cmd(common.PopMsg{})
 		}
 		return nil
@@ -271,7 +284,7 @@ func (d *IssueDetail) renderContent() {
 		return
 	}
 	t := d.ctx.Theme
-	w := min(d.w-2, 110)
+	w := min(d.w-d.paneW()-4, 100)
 	iss := d.issue()
 	var b strings.Builder
 	line := 0
@@ -283,7 +296,7 @@ func (d *IssueDetail) renderContent() {
 	addLink := func(l link, text string) {
 		l.line = line
 		if len(d.links) == d.focus {
-			text = t.Selected.Render(t.Cursor.Render("▌") + text)
+			text = t.Select(" "+text, w)
 		} else {
 			text = " " + text
 		}
@@ -302,11 +315,13 @@ func (d *IssueDetail) renderContent() {
 		return
 	}
 
-	write(t.Dim.Render(iss.Team.Name+" › "+iss.Identifier) + "  " + t.StateIcon(iss.State.Type, iss.State.Color) + " " + iss.State.Name)
+	write("")
 	write(t.Title.Width(w).Render(iss.Title))
 	write("")
-	write(d.metadata(iss, w))
-	write("")
+	if d.paneW() == 0 {
+		write(d.metadata(iss, w))
+		write("")
+	}
 
 	if d.detail == nil {
 		if d.err != nil {
@@ -368,21 +383,27 @@ func (d *IssueDetail) renderContent() {
 		write("")
 	}
 
-	write(t.Header.Render(fmt.Sprintf("Comments (%d)", len(det.Comments.Nodes))))
+	write(t.Fgc(t.Border, strings.Repeat("─", w)))
+	count := fmt.Sprintf("  %d comments", len(det.Comments.Nodes))
+	if len(det.Comments.Nodes) == 1 {
+		count = "  1 comment"
+	}
+	write(t.Bold.Render("Activity") + t.Dim.Render(count))
+	write("")
 	if len(det.Comments.Nodes) == 0 {
-		write(t.Faint.Render("No comments yet. Press m to add one."))
+		write(t.Faint.Render("No comments yet. Press m to leave a comment."))
 	}
 	for i := range det.Comments.Nodes {
 		c := &det.Comments.Nodes[i]
-		author := "Someone"
+		author, avatarURL := "Someone", ""
 		if c.User != nil {
-			author = c.User.DisplayName
+			author, avatarURL = c.User.DisplayName, c.User.AvatarUrl
 		}
 		indent := ""
 		if c.Parent != nil {
 			indent = "  ↳ "
 		}
-		meta := indent + t.Bold.Render(author) + " " + t.Dim.Render(common.Ago(c.CreatedAt)+" ago")
+		meta := indent + t.Avatar(author, avatarURL) + " " + t.Bold.Render(author) + " " + t.Dim.Render(common.Ago(c.CreatedAt)+" ago")
 		if !c.EditedAt.IsZero() {
 			meta += t.Faint.Render(" (edited)")
 		}
@@ -392,9 +413,14 @@ func (d *IssueDetail) renderContent() {
 			md = &markdown{}
 			d.cmd[c.Id] = md
 		}
-		body := md.render(t, c.Body, w-4)
-		write(lipgloss.NewStyle().PaddingLeft(len(indent) + 2).Render(body))
-		write("")
+		cw := w - len(indent) - 2
+		body := theme.Surface(md.render(t, c.Body, cw-4), cw, t.CardBg)
+		edge := func(g string) string {
+			return strings.Repeat(" ", len(indent)+1) + t.Fgc(t.CardBg, strings.Repeat(g, cw))
+		}
+		write(edge("▄"))
+		write(lipgloss.NewStyle().PaddingLeft(len(indent) + 1).Render(body))
+		write(edge("▀"))
 	}
 	if d.loading {
 		write(d.spin.View() + t.Dim.Render(" refreshing…"))
@@ -473,5 +499,78 @@ func (d *IssueDetail) metadata(iss *linear.Issue, w int) string {
 }
 
 func (d *IssueDetail) View() string {
-	return d.vp.View()
+	if d.paneW() == 0 {
+		return d.vp.View()
+	}
+	t := d.ctx.Theme
+	sep := strings.TrimSuffix(strings.Repeat(t.Fgc(t.Border, "│")+"\n", d.h), "\n")
+	return lipgloss.JoinHorizontal(lipgloss.Top, common.FitLines(d.vp.View(), d.h), sep, d.properties())
+}
+
+// properties renders Linear's issue sidebar: one labeled row per property.
+func (d *IssueDetail) properties() string {
+	t := d.ctx.Theme
+	iss := d.issue()
+	w := propsW - 3
+	if iss == nil {
+		return ""
+	}
+	row := func(label, value string) string {
+		return "  " + common.Fit(t.Dim.Render(label), 11) + common.Fit(value, w-11)
+	}
+	assignee := t.Faint.Render("◌ ") + t.Dim.Render("Assign")
+	if iss.Assignee != nil {
+		assignee = t.Avatar(iss.Assignee.DisplayName, iss.Assignee.AvatarUrl) + " " + t.App.Render(iss.Assignee.DisplayName)
+	}
+	lines := []string{
+		"",
+		"  " + t.Dim.Render(iss.Identifier) + "  " + t.Faint.Render("y ⎘  b ⑂  o ↗"),
+		"",
+		t.Faint.Render("  Properties"),
+		"",
+		row("Status", t.StateIcon(iss.State.Type, iss.State.Color)+" "+t.App.Render(iss.State.Name)),
+		row("Priority", t.Priority(iss.Priority)+" "+t.App.Render(theme.PriorityName(iss.Priority))),
+		row("Assignee", assignee),
+	}
+	if iss.Estimate != 0 {
+		lines = append(lines, row("Estimate", t.App.Render(fmt.Sprintf("%g points", iss.Estimate))))
+	}
+	if iss.DueDate != "" {
+		lines = append(lines, row("Due date", dueShort(t, iss.DueDate)))
+	}
+	lines = append(lines, "", t.Faint.Render("  Labels"), "")
+	if len(iss.Labels.Nodes) == 0 {
+		lines = append(lines, "  "+t.Dim.Render("+ Add label"))
+	}
+	var chips []string
+	for _, l := range iss.Labels.Nodes {
+		chips = append(chips, theme.Pill(t.Fgc(t.Hex(l.Color), "●")+" "+t.App.Render(l.Name), t.ChipBg))
+	}
+	for _, r := range layoutChips(chips, w-2, 4) {
+		lines = append(lines, "  "+r)
+	}
+	lines = append(lines, "", t.Faint.Render("  Cycle"), "")
+	if iss.Cycle != nil {
+		lines = append(lines, "  "+t.Fgc(t.Accent, "↻")+" "+t.App.Render(CycleName(iss.Cycle.Number, iss.Cycle.Name)))
+	} else {
+		lines = append(lines, "  "+t.Dim.Render("+ Add to cycle"))
+	}
+	lines = append(lines, "", t.Faint.Render("  Project"), "")
+	if iss.Project != nil {
+		lines = append(lines, "  "+t.Fgc(t.Hex(iss.Project.Color), "◆")+" "+t.App.Render(iss.Project.Name))
+		if iss.ProjectMilestone != nil {
+			lines = append(lines, "    "+t.Dim.Render("◇ "+iss.ProjectMilestone.Name))
+		}
+	} else {
+		lines = append(lines, "  "+t.Dim.Render("+ Add to project"))
+	}
+	lines = append(lines, "")
+	if d.detail != nil && d.detail.Creator != nil {
+		lines = append(lines, "  "+t.Faint.Render("Created by "+d.detail.Creator.DisplayName))
+	}
+	lines = append(lines, "  "+t.Faint.Render("Created "+shortDate(iss.CreatedAt)+" · updated "+common.Ago(iss.UpdatedAt)+" ago"))
+	for i, l := range lines {
+		lines[i] = common.Fit(l, propsW-1)
+	}
+	return common.FitLines(strings.Join(lines, "\n"), d.h)
 }

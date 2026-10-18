@@ -5,6 +5,8 @@ package tui
 import (
 	"context"
 	"errors"
+	"log"
+	"net/http"
 	"os"
 	"strings"
 	"time"
@@ -21,6 +23,7 @@ import (
 	"github.com/andrinoff/linear-tui/internal/linear"
 	"github.com/andrinoff/linear-tui/internal/tui/common"
 	"github.com/andrinoff/linear-tui/internal/tui/components"
+	"github.com/andrinoff/linear-tui/internal/tui/images"
 	"github.com/andrinoff/linear-tui/internal/tui/theme"
 	"github.com/andrinoff/linear-tui/internal/tui/views"
 )
@@ -59,6 +62,7 @@ type (
 	toastExpiredMsg  struct{ id int }
 	refreshTickMsg   struct{}
 	toggleSidebarMsg struct{}
+	imageShownMsg    struct{ key string }
 	branchIssueMsg   struct{ issue *linear.Issue }
 )
 
@@ -84,6 +88,8 @@ type App struct {
 	created  *linear.Issue
 	spin     spinner.Model
 	help     help.Model
+	images   *images.Manager
+	themeErr error
 	w, h     int
 }
 
@@ -91,25 +97,71 @@ func New(opts Options) *App {
 	keys := common.DefaultKeys()
 	keys.Apply(opts.Cfg.Keys)
 	cwd, _ := os.Getwd()
-	dark := opts.Cfg.Theme != "light"
 	ctx := &common.Ctx{
 		Cfg:   opts.Cfg,
 		State: config.LoadState(),
-		Theme: theme.New(dark),
 		Keys:  keys,
 		Repo:  git.Repo{Dir: cwd},
 	}
-	a := &App{ctx: ctx, opts: opts, sidebarOpen: true, help: help.New(),
-		spin: spinner.New(spinner.WithSpinner(spinner.MiniDot), spinner.WithStyle(ctx.Theme.Cursor))}
-	a.help.Styles = help.DefaultStyles(dark)
+	a := &App{ctx: ctx, opts: opts, sidebarOpen: true, help: help.New(), spin: spinner.New(spinner.WithSpinner(spinner.MiniDot))}
+	if images.Supported(opts.Cfg.Images) {
+		a.images = images.NewManager()
+		if path := os.Getenv("LINEAR_TUI_DEBUG"); path != "" {
+			if f, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600); err == nil {
+				a.images.Log = log.New(f, "", log.LstdFlags).Printf
+			}
+		}
+	}
+	a.loadTheme(opts.Cfg.Theme != "light")
 	return a
+}
+
+// SetSender lets background image loads reach the program (tea.Program.Send).
+func (a *App) SetSender(send func(tea.Msg)) {
+	if a.images != nil {
+		a.images.Send = send
+	}
+}
+
+// Cleanup returns the escape sequence that frees uploaded images; write it
+// to the terminal after the program exits.
+func (a *App) Cleanup() string {
+	if a.images == nil {
+		return ""
+	}
+	return a.images.Cleanup()
+}
+
+// loadTheme resolves the configured theme (built-in or a file in the
+// themes directory) for a terminal with a dark or light background.
+func (a *App) loadTheme(termDark bool) {
+	dir, _ := config.ThemesDir()
+	t, err := theme.Resolve(a.ctx.Cfg.Theme, dir, termDark)
+	a.themeErr = err
+	a.applyTheme(t)
+}
+
+func (a *App) applyTheme(t *theme.Theme) {
+	if a.images != nil {
+		t.Image = a.images.Cells
+	}
+	a.ctx.Theme = t
+	a.spin.Style = t.Cursor
+	a.help.Styles = help.Styles{
+		ShortKey: t.StatusKey, ShortDesc: t.Faint, ShortSeparator: t.Faint,
+		FullKey: t.StatusKey, FullDesc: t.Faint, FullSeparator: t.Faint, Ellipsis: t.Faint,
+	}
 }
 
 // Ctx exposes the shared context (tests).
 func (a *App) Ctx() *common.Ctx { return a.ctx }
 
 func (a *App) Init() tea.Cmd {
-	return tea.Batch(tea.RequestBackgroundColor, a.spin.Tick, a.connect())
+	cmds := []tea.Cmd{tea.RequestBackgroundColor, a.spin.Tick, a.connect()}
+	if a.themeErr != nil {
+		cmds = append(cmds, common.Cmd(common.ToastMsg{Text: a.themeErr.Error(), Err: true}))
+	}
+	return tea.Batch(cmds...)
 }
 
 // connect loads credentials and bootstraps the session, or shows login.
@@ -131,11 +183,15 @@ func (a *App) connect() tea.Cmd {
 		return a.showLogin(err.Error())
 	}
 	a.ctx.Svc = linear.NewService(linear.NewClient(a.opts.Endpoint, rt))
+	a.ctx.Svc.HTTP = &http.Client{Transport: rt, Timeout: 30 * time.Second}
 	return a.boot()
 }
 
 func (a *App) boot() tea.Cmd {
 	a.booting = true
+	if a.images != nil {
+		a.images.Fetch = a.ctx.Svc.Fetch
+	}
 	svc := a.ctx.Svc
 	return func() tea.Msg {
 		v, err := svc.Viewer(bg())
@@ -162,16 +218,26 @@ func (a *App) top() common.View {
 	return a.stack[len(a.stack)-1]
 }
 
-func (a *App) mainSize() (int, int) {
-	w := a.w
+func (a *App) sideW() int {
 	if a.sidebarOpen && a.loggedIn {
-		w -= sidebarWidth
+		return sidebarWidth
 	}
-	h := a.h - 2
+	return 0
+}
+
+// panelSize is the outer size of the inset content panel (with border).
+func (a *App) panelSize() (int, int) {
+	return max(4, a.w-a.sideW()-1), max(4, a.h-1)
+}
+
+// mainSize is the area views render into: the panel minus its border,
+// side padding, and the title row.
+func (a *App) mainSize() (int, int) {
 	if !a.loggedIn {
 		return a.w, a.h
 	}
-	return max(1, w), max(1, h)
+	pw, ph := a.panelSize()
+	return max(1, pw-4), max(1, ph-3)
 }
 
 func (a *App) resize() {
@@ -201,11 +267,8 @@ func (a *App) navigate(target string) tea.Cmd {
 	a.root = target
 	a.stack = nil
 	a.modal = nil
-	for i, it := range navItems {
-		if it.target == target {
-			a.side.cursor = i
-		}
-	}
+	a.side.build(a.ctx, a.unread)
+	a.side.selectRoot(target)
 	return a.push(v)
 }
 
@@ -216,20 +279,29 @@ func (a *App) rootView(target string) common.View {
 	case "inbox":
 		return views.NewInbox(ctx)
 	case "my":
-		return views.NewIssueList(ctx, "My issues", linear.Filter{AssignedToMe: true}, nil).ActiveOnly().WithGroup(views.GroupState)
+		return views.MyIssues(ctx)
 	case "team":
-		if team == nil {
-			return views.NewIssueList(ctx, "All issues", linear.Filter{}, nil).ActiveOnly()
-		}
-		return views.NewIssueList(ctx, team.Name, linear.Filter{TeamID: team.Id}, nil).ActiveOnly().WithGroup(views.GroupState)
+		return views.TeamIssues(ctx, team)
 	case "board":
-		return views.NewBoard(ctx, team, "", "")
+		if team == nil {
+			return nil
+		}
+		return views.NewBoard(ctx, team, linear.Filter{}, team.Name)
 	case "cycles":
 		return views.NewCycles(ctx, team)
+	case "cycle-current", "cycle-upcoming":
+		if team == nil {
+			return nil
+		}
+		return views.CycleIssues(ctx, team, target == "cycle-upcoming")
 	case "projects":
 		return views.NewProjects(ctx)
+	case "team-projects":
+		return views.NewTeamProjects(ctx, team)
 	case "views":
 		return views.NewCustomViews(ctx)
+	case "team-views":
+		return views.NewTeamViews(ctx, team)
 	case "search":
 		return views.NewSearch(ctx, "")
 	}
@@ -297,7 +369,7 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, a.broadcast(msg)
 	case tea.BackgroundColorMsg:
 		if a.ctx.Cfg.Theme == "" || a.ctx.Cfg.Theme == "auto" {
-			a.setTheme(msg.IsDark())
+			a.loadTheme(msg.IsDark())
 		}
 		return a, a.broadcast(msg)
 	case spinner.TickMsg:
@@ -381,7 +453,7 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return a, a.openModal(components.NewHelpOverlay(a.ctx, vh))
 	case common.ToggleThemeMsg:
-		a.setTheme(!a.ctx.Theme.Dark)
+		a.applyTheme(theme.New(!a.ctx.Theme.Dark))
 		return a, nil
 	case toggleSidebarMsg:
 		a.sidebarOpen = !a.sidebarOpen
@@ -408,6 +480,11 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return a, tea.Batch(a.push(views.NewIssueDetail(a.ctx, msg.issue.Id, msg.issue)),
 				a.addToast("Opened "+msg.issue.Identifier+" from current git branch", false))
 		}
+		return a, nil
+	case images.ReadyMsg:
+		return a, tea.Sequence(tea.Raw(msg.Seq), common.Cmd(imageShownMsg{key: msg.Key}))
+	case imageShownMsg:
+		a.images.Shown(msg.key)
 		return a, nil
 	case tea.KeyPressMsg:
 		return a, a.handleKey(msg)
@@ -443,12 +520,6 @@ func (a *App) openModal(m common.View) tea.Cmd {
 	return m.Init()
 }
 
-func (a *App) setTheme(dark bool) {
-	a.ctx.Theme = theme.New(dark)
-	a.help.Styles = help.DefaultStyles(dark)
-	a.spin.Style = a.ctx.Theme.Cursor
-}
-
 func (a *App) pop() tea.Cmd {
 	if len(a.stack) > 1 {
 		a.stack = a.stack[:len(a.stack)-1]
@@ -462,6 +533,7 @@ func (a *App) afterBoot(msg bootMsg) tea.Cmd {
 	ctx.Viewer = msg.viewer
 	a.loggedIn = true
 	a.lastSync = time.Now()
+	ctx.Teams = msg.teams
 	ctx.Team = pickTeam(msg.teams, ctx.State.LastTeam, ctx.Cfg.DefaultTeam)
 	target := ctx.State.LastView
 	if a.rootView(target) == nil {
@@ -603,40 +675,59 @@ func (a *App) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 
 func (a *App) sidebarKey(msg tea.KeyPressMsg) tea.Cmd {
 	k := a.ctx.Keys
+	a.side.build(a.ctx, a.unread)
+	n := len(a.side.selectable())
 	switch {
 	case key.Matches(msg, k.Down):
-		a.side.cursor = min(len(navItems)-1, a.side.cursor+1)
+		a.side.cursor = min(n-1, a.side.cursor+1)
 	case key.Matches(msg, k.Up):
 		a.side.cursor = max(0, a.side.cursor-1)
 	case key.Matches(msg, k.Enter), key.Matches(msg, k.Right):
 		a.focusSide = false
-		return a.navigate(navItems[a.side.cursor].target)
+		return a.openSideRow(a.side.current())
 	case key.Matches(msg, k.Back):
 		a.focusSide = false
 	}
 	return nil
 }
 
+// openSideRow navigates to a sidebar entry, switching team first when the
+// entry belongs to another team.
+func (a *App) openSideRow(r *sideRow) tea.Cmd {
+	if r == nil {
+		return nil
+	}
+	if r.team != nil && (a.ctx.Team == nil || a.ctx.Team.Id != r.team.Id) {
+		a.ctx.Team = r.team
+		a.ctx.State.LastTeam = r.team.Id
+		a.broadcast(common.TeamChangedMsg{Team: r.team})
+	}
+	return a.navigate(r.target)
+}
+
 func (a *App) handleClick(m tea.Mouse) tea.Cmd {
 	if a.modal != nil || !a.loggedIn {
 		return nil
 	}
-	if a.sidebarOpen && m.X < sidebarWidth {
+	if m.X < a.sideW() {
+		if m.Y == 1 && m.X >= a.side.searchX-1 && m.X <= a.side.searchX+1 {
+			return a.navigate("search")
+		}
+		if m.Y == 1 && m.X >= a.side.composeX-1 {
+			return common.Cmd(a.createMsg())
+		}
+		if m.Y == a.h-2 && m.X < 4 {
+			return common.Cmd(common.ShowHelpMsg{})
+		}
 		if i, ok := a.side.clickRows[m.Y]; ok {
-			if i == -2 {
-				return a.openModal(a.teamPicker())
-			}
-			return a.navigate(navItems[i].target)
+			r := a.side.rows[i]
+			return a.openSideRow(&r)
 		}
 		return nil
 	}
 	a.focusSide = false
-	x := m.X
-	if a.sidebarOpen {
-		x -= sidebarWidth
-	}
 	if top := a.top(); top != nil {
-		return top.Update(common.ClickMsg{X: x, Y: m.Y - 1})
+		return top.Update(common.ClickMsg{X: m.X - a.sideW() - 2, Y: m.Y - 2})
 	}
 	return nil
 }
@@ -662,59 +753,49 @@ func (a *App) render() string {
 	if a.w == 0 {
 		return ""
 	}
+	frame := func(s string) string { return theme.Surface(common.FitLines(s, a.h), a.w, t.AppBg) }
 	if a.w < minWidth || a.h < minHeight {
-		return lipgloss.Place(a.w, a.h, lipgloss.Center, lipgloss.Center,
-			t.Dim.Render("Terminal too small.\nNeed at least 60×15."))
+		return frame(lipgloss.Place(a.w, a.h, lipgloss.Center, lipgloss.Center, t.Dim.Render("Terminal too small.\nNeed at least 60×15.")))
 	}
 	if a.booting {
-		return lipgloss.Place(a.w, a.h, lipgloss.Center, lipgloss.Center, a.spin.View()+" Connecting to Linear…")
+		return frame(lipgloss.Place(a.w, a.h, lipgloss.Center, lipgloss.Center, a.spin.View()+t.Dim.Render(" Connecting to Linear…")))
 	}
 	top := a.top()
 	var base string
-	if !a.loggedIn {
+	switch {
+	case !a.loggedIn:
 		if top != nil {
 			base = top.View()
 		}
-	} else {
-		mw, mh := a.mainSize()
-		var crumbs []string
-		for _, v := range a.stack {
-			crumbs = append(crumbs, v.Title())
-		}
-		bar := t.Title.Render(" " + strings.Join(crumbs, t.Dim.Render(" › ")))
-		if a.pendingG {
-			bar += t.Dim.Render("   g…")
-		}
-		content := ""
-		if top != nil {
-			content = top.View()
-		}
-		main := common.Fit(bar, mw) + "\n" + common.FitLines(content, mh)
+	default:
+		base = a.renderPanel(top)
 		if a.sidebarOpen {
-			side := a.side.view(a.ctx, a.root, a.focusSide, a.unread, a.h-1)
-			base = lipgloss.JoinHorizontal(lipgloss.Top, side, main)
-		} else {
-			base = main
+			a.side.build(a.ctx, a.unread)
+			side := a.side.view(a.ctx, a.root, a.focusSide, a.h-1)
+			base = lipgloss.JoinHorizontal(lipgloss.Top, side, base)
 		}
 		base = common.FitLines(base, a.h-1) + "\n" + a.statusBar()
 	}
+	base = frame(base)
+
 	layers := []*lipgloss.Layer{lipgloss.NewLayer(base)}
 	if a.modal != nil {
-		m := a.modal.View()
+		m := theme.Paint(a.modal.View(), t.ModalBg)
 		mw, mh := lipgloss.Size(m)
-		layers = append(layers, lipgloss.NewLayer(m).X(max(0, (a.w-mw)/2)).Y(max(0, (a.h-mh)/3)).Z(1))
+		layers = append(layers, lipgloss.NewLayer(m).X(max(0, (a.w-mw)/2)).Y(max(0, (a.h-mh)/4)).Z(1))
 	}
 	y := a.h - 2
 	for i := len(a.toasts) - 1; i >= 0; i-- {
 		tt := a.toasts[i]
-		style := t.Toast
+		icon := t.Success.Render("✓ ")
 		if tt.err {
-			style = t.ToastErr
+			icon = t.Error.Render("✕ ")
 		}
-		box := style.MaxWidth(min(60, a.w-4)).Render(tt.text)
+		w := min(56, a.w-4, lipgloss.Width(tt.text)+7)
+		box := theme.Paint(t.Box(icon+ansiWrap(tt.text, w-6), w, t.Border), t.ModalBg)
 		bw, bh := lipgloss.Size(box)
 		y -= bh
-		layers = append(layers, lipgloss.NewLayer(box).X(max(0, a.w-bw-1)).Y(max(0, y)).Z(2))
+		layers = append(layers, lipgloss.NewLayer(box).X(max(0, a.w-bw-2)).Y(max(0, y)).Z(2))
 	}
 	if len(layers) == 1 {
 		return base
@@ -722,19 +803,44 @@ func (a *App) render() string {
 	return lipgloss.NewCompositor(layers...).Render()
 }
 
+func ansiWrap(s string, w int) string { return lipgloss.Wrap(s, max(1, w), " ") }
+
+// renderPanel draws Linear's inset content panel: a rounded, slightly
+// lighter surface with the page title on top.
+func (a *App) renderPanel(top common.View) string {
+	t := a.ctx.Theme
+	pw, _ := a.panelSize()
+	mw, mh := a.mainSize()
+	var crumbs []string
+	for _, v := range a.stack {
+		crumbs = append(crumbs, v.Title())
+	}
+	title := t.Bold.Render(strings.Join(crumbs, t.Faint.Render("  ›  ")))
+	if a.pendingG {
+		title += t.Faint.Render("   g …")
+	}
+	content := ""
+	if top != nil {
+		content = top.View()
+	}
+	lines := append([]string{title}, strings.Split(common.FitLines(content, mh), "\n")...)
+	for i, l := range lines {
+		lines[i] = " " + common.Fit(l, mw) + " "
+	}
+	interior := theme.Surface(strings.Join(lines, "\n"), pw-2, t.PanelBg)
+	return lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(t.Border).Render(interior)
+}
+
 func (a *App) statusBar() string {
 	t := a.ctx.Theme
 	var left []string
-	if v := a.ctx.Viewer; v != nil {
-		left = append(left, v.Organization.Name)
-	}
 	if a.ctx.Team != nil {
 		left = append(left, a.ctx.Team.Key)
 	}
 	if !a.lastSync.IsZero() {
 		left = append(left, "synced "+common.Ago(a.lastSync))
 	}
-	l := t.StatusBar.Render(" " + strings.Join(left, " · ") + " ")
+	l := t.Faint.Render(" " + strings.Join(left, "  "))
 	var bindings []key.Binding
 	if a.modal != nil {
 		bindings = a.modal.Help()
@@ -744,6 +850,8 @@ func (a *App) statusBar() string {
 		bindings = top.Help()
 	}
 	bindings = append(bindings, a.ctx.Keys.Palette, a.ctx.Keys.Help)
-	a.help.SetWidth(max(10, a.w-lipgloss.Width(l)-1))
-	return l + a.help.ShortHelpView(bindings)
+	room := max(10, a.w-lipgloss.Width(l)-2)
+	a.help.SetWidth(room)
+	h := a.help.ShortHelpView(bindings)
+	return l + strings.Repeat(" ", max(1, a.w-lipgloss.Width(l)-lipgloss.Width(h)-1)) + h
 }

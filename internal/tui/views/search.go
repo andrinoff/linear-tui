@@ -1,6 +1,7 @@
 package views
 
 import (
+	"slices"
 	"time"
 
 	"charm.land/bubbles/v2/key"
@@ -142,6 +143,7 @@ func (s *Search) View() string {
 type CustomViews struct {
 	cursorList
 	views []linear.CustomView
+	team  *linear.Team
 }
 
 type customViewsLoadedMsg struct {
@@ -154,7 +156,17 @@ func NewCustomViews(ctx *common.Ctx) *CustomViews {
 	return &CustomViews{cursorList: newCursorList(ctx)}
 }
 
-func (c *CustomViews) Title() string { return "Views" }
+// NewTeamViews lists views scoped to the team.
+func NewTeamViews(ctx *common.Ctx, team *linear.Team) *CustomViews {
+	return &CustomViews{cursorList: newCursorList(ctx), team: team}
+}
+
+func (c *CustomViews) Title() string {
+	if c.team != nil {
+		return c.team.Name + " › Views"
+	}
+	return "Views"
+}
 func (c *CustomViews) Help() []key.Binding {
 	return []key.Binding{c.ctx.Keys.Enter, c.ctx.Keys.Refresh}
 }
@@ -183,7 +195,11 @@ func (c *CustomViews) Update(msg tea.Msg) tea.Cmd {
 		if msg.err != nil {
 			return common.Err(msg.err)
 		}
-		c.views, c.n = msg.views, len(msg.views)
+		c.views = msg.views
+		if c.team != nil {
+			c.views = slices.DeleteFunc(c.views, func(v linear.CustomView) bool { return v.Team == nil || v.Team.Id != c.team.Id })
+		}
+		c.n = len(c.views)
 	case common.RefreshMsg:
 		return c.load()
 	case tea.KeyPressMsg:

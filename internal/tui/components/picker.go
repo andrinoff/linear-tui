@@ -7,9 +7,11 @@ import (
 	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/sahilm/fuzzy"
 
 	"github.com/andrinoff/linear-tui/internal/tui/common"
+	"github.com/andrinoff/linear-tui/internal/tui/theme"
 )
 
 type Item struct {
@@ -172,12 +174,15 @@ func (p *Picker) Update(msg tea.Msg) tea.Cmd {
 
 func (p *Picker) listHeight() int { return max(3, p.h-6) }
 
+// View mirrors Linear's command menu: a context chip, the query, a divider,
+// then items with right-aligned hints.
 func (p *Picker) View() string {
 	t := p.ctx.Theme
-	w := p.w - 4
+	w := p.w - 3
 	var b strings.Builder
-	b.WriteString(t.Title.Render(p.title) + "\n")
+	b.WriteString(theme.Pill(t.Dim.Render(p.title), t.ChipBg) + "\n")
 	b.WriteString(p.input.View() + "\n")
+	b.WriteString(t.Fgc(t.Border, strings.Repeat("─", w)) + "\n")
 	lh := p.listHeight()
 	switch {
 	case p.loading:
@@ -185,18 +190,18 @@ func (p *Picker) View() string {
 	case p.err != nil:
 		b.WriteString(t.Error.Render(common.ErrText(p.err)))
 	case len(p.matches) == 0:
-		b.WriteString(t.Dim.Render("No matches"))
+		b.WriteString(t.Dim.Render("No results"))
 	default:
 		p.offset = common.Scroll(p.cursor, p.offset, lh, len(p.matches))
 		end := min(len(p.matches), p.offset+lh)
 		for i := p.offset; i < end; i++ {
 			it := p.items[p.matches[i]]
-			line := ""
+			line := " "
 			if p.multi {
 				if it.Selected {
-					line = t.Cursor.Render("[x] ")
+					line += t.Cursor.Render("☑ ")
 				} else {
-					line = t.Dim.Render("[ ] ")
+					line += t.Faint.Render("☐ ")
 				}
 			}
 			if it.Prefix != "" {
@@ -204,12 +209,14 @@ func (p *Picker) View() string {
 			}
 			line += it.Label
 			if it.Detail != "" {
-				line += "  " + t.Dim.Render(it.Detail)
+				hint := t.Dim.Render(it.Detail) + " "
+				room := w - lipgloss.Width(hint) - 2
+				line = common.Fit(line, room) + "  " + hint
 			}
 			if i == p.cursor {
-				line = t.Selected.Render(common.Fit(t.Cursor.Render("▌")+line, w))
+				line = t.Select(line, w)
 			} else {
-				line = common.Fit(" "+line, w)
+				line = common.Fit(line, w)
 			}
 			b.WriteString(line)
 			if i < end-1 {
@@ -217,5 +224,5 @@ func (p *Picker) View() string {
 			}
 		}
 	}
-	return t.Modal.Width(p.w).Render(b.String())
+	return t.Box(b.String(), p.w, t.Border)
 }
