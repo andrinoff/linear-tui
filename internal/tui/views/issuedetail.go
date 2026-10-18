@@ -11,6 +11,7 @@ import (
 	"charm.land/lipgloss/v2"
 
 	"github.com/andrinoff/linear-tui/internal/config"
+	"github.com/andrinoff/linear-tui/internal/github"
 	"github.com/andrinoff/linear-tui/internal/linear"
 	"github.com/andrinoff/linear-tui/internal/tui/common"
 	"github.com/andrinoff/linear-tui/internal/tui/components"
@@ -216,6 +217,9 @@ func (d *IssueDetail) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 			case linkIssue:
 				return common.Cmd(common.PushMsg{View: NewIssueDetail(d.ctx, l.id, nil)})
 			case linkURL:
+				if _, ok := github.ParseURL(l.url); ok {
+					return common.Cmd(common.PushMsg{View: NewPullRequest(d.ctx, l.url, "", "")})
+				}
 				return common.OpenURL(l.url)
 			case linkComment:
 				return CommentComposer(d.ctx, d.id, l.comment.Id)

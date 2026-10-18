@@ -45,7 +45,7 @@ type Inbox struct {
 	hasMore bool
 	paging  bool
 
-	preview      *IssueDetail
+	preview      common.View
 	previewID    string
 	previewSeq   int
 	focusPreview bool
@@ -149,6 +149,13 @@ func issueOf(n linear.Notification) (*linear.Issue, bool) {
 	return nil, false
 }
 
+func prOf(n linear.Notification) (*linear.NotificationFieldsPullRequest, bool) {
+	if pn, ok := n.(*linear.NotificationFieldsPullRequestNotification); ok && pn.PullRequest.Url != "" {
+		return &pn.PullRequest, true
+	}
+	return nil, false
+}
+
 func (b *Inbox) remove(id string) {
 	for i, n := range b.items {
 		if n.GetId() == id {
@@ -206,16 +213,22 @@ func (b *Inbox) showPreview() tea.Cmd {
 	if !b.isRead(n) {
 		cmds = append(cmds, b.setRead(n, true))
 	}
-	iss, ok := issueOf(n)
+	var id string
+	var view common.View
+	if iss, ok := issueOf(n); ok {
+		d := NewIssueDetail(b.ctx, iss.Id, iss)
+		d.Embedded = true
+		id, view = iss.Id, d
+	} else if pr, ok := prOf(n); ok {
+		id, view = pr.Url, NewPullRequest(b.ctx, pr.Url, pr.Title, string(pr.Status))
+	}
 	switch {
-	case !ok:
+	case view == nil:
 		b.preview, b.previewID = nil, ""
-	case iss.Id != b.previewID:
-		b.preview = NewIssueDetail(b.ctx, iss.Id, iss)
-		b.preview.Embedded = true
-		b.previewID = iss.Id
-		b.preview.SetSize(b.previewW(), b.h)
-		cmds = append(cmds, b.preview.Init())
+	case id != b.previewID:
+		b.preview, b.previewID = view, id
+		view.SetSize(b.previewW(), b.h)
+		cmds = append(cmds, view.Init())
 	}
 	return tea.Batch(cmds...)
 }
@@ -296,6 +309,8 @@ func (b *Inbox) open() tea.Cmd {
 	}
 	if iss, ok := issueOf(n); ok {
 		cmds = append(cmds, common.Cmd(common.PushMsg{View: NewIssueDetail(b.ctx, iss.Id, iss)}))
+	} else if pr, ok := prOf(n); ok {
+		cmds = append(cmds, common.Cmd(common.PushMsg{View: NewPullRequest(b.ctx, pr.Url, pr.Title, string(pr.Status))}))
 	} else if n.GetUrl() != "" {
 		cmds = append(cmds, common.OpenURL(n.GetUrl()))
 	}
@@ -386,7 +401,7 @@ func (b *Inbox) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 
 // humanizeType turns "issueStatusChanged" into "status changed".
 func humanizeType(s string) string {
-	s = strings.TrimPrefix(s, "issue")
+	s = strings.TrimPrefix(strings.TrimPrefix(s, "issue"), "pullRequest")
 	var b strings.Builder
 	for i, r := range s {
 		if unicode.IsUpper(r) {
@@ -440,6 +455,9 @@ func activity(n linear.Notification) string {
 		verb = humanizeType(n.GetType())
 	}
 	in, ok := n.(*linear.NotificationFieldsIssueNotification)
+	if _, isPR := prOf(n); isPR && n.GetSubtitle() != "" {
+		return actor + " " + strings.TrimPrefix(n.GetSubtitle(), actor+" ")
+	}
 	if !ok {
 		if s := n.GetSubtitle(); s != "" {
 			return actor + " " + s
@@ -470,6 +488,9 @@ func (b *Inbox) row(n linear.Notification, w int) []string {
 	if iss, ok := issueOf(n); ok {
 		title = t.Dim.Render(iss.Identifier) + " " + iss.Title
 		status = t.StateIcon(iss.State.Type, iss.State.Color)
+	} else if pr, ok := prOf(n); ok {
+		title = pr.Title
+		status = PRIcon(t, string(pr.Status))
 	}
 	dot := " "
 	if b.isRead(n) {
@@ -486,8 +507,7 @@ func (b *Inbox) row(n linear.Notification, w int) []string {
 
 func (b *Inbox) renderList(w int) string {
 	t := b.ctx.Theme
-	head := " " + t.Bold.Render(strconv.Itoa(b.unread())+" unread") +
-		t.Faint.Render("   u read  z snooze  d archive  M read all")
+	head := " " + t.Bold.Render(strconv.Itoa(b.unread())+" unread")
 	lines := []string{common.Fit(head, w), ""}
 	switch {
 	case b.loading && b.n == 0:

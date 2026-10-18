@@ -2399,6 +2399,48 @@ func (v *NotificationFieldsProjectNotification) GetUrl() string { return v.Url }
 // GetActor returns NotificationFieldsProjectNotification.Actor, and is useful for accessing the field via an interface.
 func (v *NotificationFieldsProjectNotification) GetActor() *UserFields { return v.Actor }
 
+// NotificationFieldsPullRequest includes the requested fields of the GraphQL type PullRequest.
+// The GraphQL type's documentation follows.
+//
+// [Internal] A pull or merge request from a connected version control system (GitHub or GitLab). Pull requests are automatically linked to Linear issues via branch names or commit messages containing issue identifiers. They track the full lifecycle including status, reviewers, checks, and merge state, and are synced bidirectionally with the hosting provider.
+type NotificationFieldsPullRequest struct {
+	// The unique identifier of the entity.
+	Id string `json:"id"`
+	// The pull request number as assigned by the hosting provider (e.g., #123 on GitHub). Unique within a repository.
+	Number float64 `json:"number"`
+	// The title of the pull request.
+	Title string `json:"title"`
+	// The URL of the pull request on the hosting provider (e.g., a GitHub or GitLab URL).
+	Url string `json:"url"`
+	// The current status of the pull request (open, closed, merged, or draft). Synced from the hosting provider.
+	Status PullRequestStatus `json:"status"`
+	// The source (head) branch of the pull request that contains the proposed changes.
+	SourceBranch string `json:"sourceBranch"`
+	// The target (base) branch that the pull request will be merged into.
+	TargetBranch string `json:"targetBranch"`
+}
+
+// GetId returns NotificationFieldsPullRequest.Id, and is useful for accessing the field via an interface.
+func (v *NotificationFieldsPullRequest) GetId() string { return v.Id }
+
+// GetNumber returns NotificationFieldsPullRequest.Number, and is useful for accessing the field via an interface.
+func (v *NotificationFieldsPullRequest) GetNumber() float64 { return v.Number }
+
+// GetTitle returns NotificationFieldsPullRequest.Title, and is useful for accessing the field via an interface.
+func (v *NotificationFieldsPullRequest) GetTitle() string { return v.Title }
+
+// GetUrl returns NotificationFieldsPullRequest.Url, and is useful for accessing the field via an interface.
+func (v *NotificationFieldsPullRequest) GetUrl() string { return v.Url }
+
+// GetStatus returns NotificationFieldsPullRequest.Status, and is useful for accessing the field via an interface.
+func (v *NotificationFieldsPullRequest) GetStatus() PullRequestStatus { return v.Status }
+
+// GetSourceBranch returns NotificationFieldsPullRequest.SourceBranch, and is useful for accessing the field via an interface.
+func (v *NotificationFieldsPullRequest) GetSourceBranch() string { return v.SourceBranch }
+
+// GetTargetBranch returns NotificationFieldsPullRequest.TargetBranch, and is useful for accessing the field via an interface.
+func (v *NotificationFieldsPullRequest) GetTargetBranch() string { return v.TargetBranch }
+
 // NotificationFields includes the GraphQL fields of PullRequestNotification requested by the fragment NotificationFields.
 // The GraphQL type's documentation follows.
 //
@@ -2423,6 +2465,8 @@ type NotificationFieldsPullRequestNotification struct {
 	Url string `json:"url"`
 	// The user that caused the notification. Null if the notification was triggered by a non-user actor such as an integration, external user, or system event.
 	Actor *UserFields `json:"actor"`
+	// The pull request related to the notification.
+	PullRequest NotificationFieldsPullRequest `json:"pullRequest"`
 }
 
 // GetTypename returns NotificationFieldsPullRequestNotification.Typename, and is useful for accessing the field via an interface.
@@ -2456,6 +2500,11 @@ func (v *NotificationFieldsPullRequestNotification) GetUrl() string { return v.U
 
 // GetActor returns NotificationFieldsPullRequestNotification.Actor, and is useful for accessing the field via an interface.
 func (v *NotificationFieldsPullRequestNotification) GetActor() *UserFields { return v.Actor }
+
+// GetPullRequest returns NotificationFieldsPullRequestNotification.PullRequest, and is useful for accessing the field via an interface.
+func (v *NotificationFieldsPullRequestNotification) GetPullRequest() NotificationFieldsPullRequest {
+	return v.PullRequest
+}
 
 // NotificationFields includes the GraphQL fields of UsageAlertNotification requested by the fragment NotificationFields.
 // The GraphQL type's documentation follows.
@@ -3023,6 +3072,27 @@ type ProjectsResponse struct {
 
 // GetProjects returns ProjectsResponse.Projects, and is useful for accessing the field via an interface.
 func (v *ProjectsResponse) GetProjects() ProjectsProjectsProjectConnection { return v.Projects }
+
+// The status of a pull request.
+type PullRequestStatus string
+
+const (
+	PullRequestStatusApproved PullRequestStatus = "approved"
+	PullRequestStatusClosed   PullRequestStatus = "closed"
+	PullRequestStatusDraft    PullRequestStatus = "draft"
+	PullRequestStatusInreview PullRequestStatus = "inReview"
+	PullRequestStatusMerged   PullRequestStatus = "merged"
+	PullRequestStatusOpen     PullRequestStatus = "open"
+)
+
+var AllPullRequestStatus = []PullRequestStatus{
+	PullRequestStatusApproved,
+	PullRequestStatusClosed,
+	PullRequestStatusDraft,
+	PullRequestStatusInreview,
+	PullRequestStatusMerged,
+	PullRequestStatusOpen,
+}
 
 // StateFields includes the GraphQL fields of WorkflowState requested by the fragment StateFields.
 // The GraphQL type's documentation follows.
@@ -4929,6 +4999,17 @@ fragment NotificationFields on Notification {
 		}
 		parentCommentId
 		reactionEmoji
+	}
+	... on PullRequestNotification {
+		pullRequest {
+			id
+			number
+			title
+			url
+			status
+			sourceBranch
+			targetBranch
+		}
 	}
 }
 fragment UserFields on User {

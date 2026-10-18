@@ -2,11 +2,20 @@ package tui
 
 import (
 	"encoding/json"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
+
+	"github.com/andrinoff/linear-tui/internal/github"
 )
+
+const previewWait = 400 * time.Millisecond
 
 func TestBootShowsMyIssues(t *testing.T) {
 	h := newHarness(t)
@@ -87,7 +96,7 @@ func TestNavigateBoardAndCycles(t *testing.T) {
 func TestInboxMarksRead(t *testing.T) {
 	h := newHarness(t)
 	h.keys("g", "i")
-	h.contains("1 unread", "issue Assigned To You"[:0]+"assigned to you", "ENG-1")
+	h.contains("1 unread", "bob assigned you", "ENG-1 Fix login crash")
 	h.keys("u")
 	calls := h.fake.called("NotificationUpdate")
 	if len(calls) != 1 {
@@ -197,4 +206,45 @@ func TestPasteIntoListFilter(t *testing.T) {
 	h.send(tea.PasteMsg{Content: "dark"})
 	h.contains("/dark", "Add dark mode")
 	h.lacks("Fix login crash")
+}
+
+func TestInboxSplitPreviewMarksRead(t *testing.T) {
+	h := newHarness(t)
+	h.send(tea.WindowSizeMsg{Width: 170, Height: 40})
+	h.keys("g", "i")
+	time.Sleep(previewWait)
+	h.settle()
+	h.contains("bob assigned you", "Activity", "Reproduced on staging.", "0 unread")
+	if n := len(h.fake.called("NotificationUpdate")); n != 1 {
+		t.Fatalf("previewing should mark read once, got %d updates", n)
+	}
+	h.keys("l", "m")
+	h.contains("New comment")
+}
+
+func TestInboxPullRequestPreview(t *testing.T) {
+	fixture, err := os.ReadFile("../github/testdata/pr.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/graphql" {
+			w.Write(fixture)
+			return
+		}
+		io.WriteString(w, "diff --git a/tea.go b/tea.go\n--- a/tea.go\n+++ b/tea.go\n@@ -1 +1 @@\n-old line\n+new line\n")
+	}))
+	defer srv.Close()
+	github.Register("github.com", &github.Client{HTTP: srv.Client(), Token: "t", API: srv.URL, GraphQL: srv.URL + "/graphql"})
+
+	h := newHarness(t)
+	h.send(tea.WindowSizeMsg{Width: 190, Height: 44})
+	h.keys("g", "i")
+	h.contains("bob requested your review", "(v2) feat: ferocious renderer")
+	h.keys("down")
+	time.Sleep(previewWait)
+	h.settle()
+	h.contains("Overview", "Diff", "Opened by", "Merged by", "Merged", "files changed")
+	h.keys("l", "t")
+	h.contains("tea.go", "+new line", "-old line")
 }

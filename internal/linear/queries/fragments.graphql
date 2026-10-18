@@ -211,4 +211,15 @@ fragment NotificationFields on Notification {
     parentCommentId
     reactionEmoji
   }
+  ... on PullRequestNotification {
+    pullRequest {
+      id
+      number
+      title
+      url
+      status
+      sourceBranch
+      targetBranch
+    }
+  }
 }

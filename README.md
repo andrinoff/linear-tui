@@ -99,7 +99,7 @@ linear-tui --no-branch
 
 | Board | Detail | Inbox |
 |---|---|---|
-| `h` `l` columns, `<` `>` move card, `.` show canceled and older done | `n` / `N` next/prev link, `enter` follow or reply | `u` read, `z` snooze, `d` archive, `M` mark all read |
+| `h` `l` columns, `<` `>` move card, `.` show canceled and older done | `n` / `N` next/prev link, `enter` follow or reply | `u` read, `z` snooze, `d` archive, `M` mark all read, `l` / `h` move into / out of the issue preview |
 
 ## Configuration
 
@@ -139,6 +139,20 @@ In kitty and Ghostty, avatars and the workspace logo are drawn as real images
 through the kitty graphics protocol (Unicode placeholders). Elsewhere they fall
 back to initials. Use `images = "on"` or `"off"` to override detection. To see
 why an image isn't shown, run with `LINEAR_TUI_DEBUG=/tmp/linear-tui.log`.
+
+### GitHub pull requests
+
+Pull requests open in a Linear-style view: an Overview tab with the description
+and activity (commits, force-pushes, review requests, reviews and comments), a
+Diff tab (`t`, with `]` / `[` to jump between files), and a side panel showing
+status, branch, reviewers, checks and changed files. You'll find them in the
+inbox (PR notifications) and in an issue's links (press `enter` on a GitHub PR
+link).
+
+The GitHub token comes from `GH_TOKEN` or `GITHUB_TOKEN`, or else from the
+GitHub CLI (`gh auth token`, so run `gh auth login` once). GitHub Enterprise
+hosts work through `gh auth token --hostname`. In the PR view, `m` comments,
+`B` runs `gh pr checkout`, and `o` opens the PR in the browser.
 
 ## Development
 

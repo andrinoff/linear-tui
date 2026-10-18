@@ -50,7 +50,9 @@ var fixtures = map[string]string{
 		`"relations":{"nodes":[]},"inverseRelations":{"nodes":[]},"attachments":{"nodes":[]},` +
 		`"comments":{"nodes":[{"id":"c1","body":"Reproduced on staging.","createdAt":"2026-01-02T00:00:00Z","editedAt":null,"user":` + userBob + `,"parent":null}]}}}`,
 	"Notifications": `{"notifications":{"nodes":[{"__typename":"IssueNotification","id":"n1","type":"issueAssignedToYou","title":"Fix login crash","subtitle":"","readAt":null,"snoozedUntilAt":null,"createdAt":"2026-01-02T00:00:00Z","url":"","actor":` + userBob +
-		`,"issue":` + issueJSON("i1", "ENG-1", "Fix login crash", stTodo, 3) + `,"comment":null}],"pageInfo":{"hasNextPage":false,"endCursor":"c"}}}`,
+		`,"issue":` + issueJSON("i1", "ENG-1", "Fix login crash", stTodo, 3) + `,"comment":null},` +
+		`{"__typename":"PullRequestNotification","id":"n2","type":"pullRequestReviewRequested","title":"(v2) feat: ferocious renderer","subtitle":"requested your review","readAt":"2026-01-03T00:00:00Z","snoozedUntilAt":null,"createdAt":"2026-01-03T00:00:00Z","url":"","actor":` + userBob +
+		`,"pullRequest":{"id":"pr1","number":1200,"title":"(v2) feat: ferocious renderer","url":"https://github.com/charmbracelet/bubbletea/pull/1200","status":"merged","sourceBranch":"v2","targetBranch":"main"}}],"pageInfo":{"hasNextPage":false,"endCursor":"c"}}}`,
 	"NotificationUpdate": `{"notificationUpdate":{"success":true}}`,
 	"Cycles":             `{"team":{"cycles":{"nodes":[{"id":"cy1","number":7,"name":"","description":"","startsAt":"2026-01-01T00:00:00Z","endsAt":"2099-01-14T00:00:00Z","completedAt":null,"progress":0.5,"isActive":true,"isFuture":false,"isPast":false,"isNext":false,"scopeHistory":[10],"completedScopeHistory":[5],"issueCountHistory":[4],"completedIssueCountHistory":[2]}]}}}`,
 	"Projects":           `{"projects":{"nodes":[{"id":"p1","name":"Mobile app","description":"Ship it","color":"#4ea7fc","progress":0.25,"startDate":null,"targetDate":"2026-03-01","health":"onTrack","url":"https://linear.app/p1","status":{"name":"In Progress","type":"started","color":"#f2c94c"},"lead":` + userMe + `,"teams":{"nodes":[` + teamRef + `]}}]}}`,
